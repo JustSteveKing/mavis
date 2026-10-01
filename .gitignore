@@ -1,0 +1,7 @@
+# Build output
+/mavis
+/dist/
+
+# Go
+*.test
+*.out
