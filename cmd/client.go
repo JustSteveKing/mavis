@@ -119,8 +119,23 @@ func newClientShowCommand(a *app) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			all, problems, err := s.Engagements()
+			if err != nil {
+				return err
+			}
+			a.warn(problems)
+			engagements := []store.Engagement{}
+			for _, e := range all {
+				if e.Client == c.Slug {
+					engagements = append(engagements, e)
+				}
+			}
+
 			if a.jsonOut {
-				return a.emitJSON(c)
+				return a.emitJSON(struct {
+					store.Client
+					Engagements []store.Engagement `json:"engagements"`
+				}{c, engagements})
 			}
 			a.printf("%s (%s)\n", c.Name, c.Slug)
 			status := c.Status
@@ -140,7 +155,14 @@ func newClientShowCommand(a *app) *cobra.Command {
 					fmt.Fprintf(w, "  %s\t%s\n", row[0], row[1])
 				}
 			}
-			return w.Flush()
+			if err := w.Flush(); err != nil {
+				return err
+			}
+			if len(engagements) > 0 {
+				a.printf("\nEngagements\n")
+				a.engagementTable(engagements)
+			}
+			return nil
 		},
 	}
 }

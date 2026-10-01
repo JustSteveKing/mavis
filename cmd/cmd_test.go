@@ -101,3 +101,32 @@ func mustRun(t *testing.T, args ...string) string {
 	}
 	return out
 }
+
+func TestEngagements(t *testing.T) {
+	setup(t)
+	mustRun(t, "client", "add", "acme", "--name", "Acme Ltd")
+	mustRun(t, "client", "add", "globex")
+
+	out := mustRun(t, "engagement", "add", "acme", "reporting", "--title", "Reporting module", "--basis", "day", "--rate", "650")
+	if !strings.Contains(out, "Reporting module (acme-reporting) for acme, active") {
+		t.Fatalf("add: %q", out)
+	}
+	mustRun(t, "eng", "add", "globex", "audit", "--status", "proposed")
+
+	out = mustRun(t, "engagement", "list", "--client", "glob")
+	if !strings.Contains(out, "globex-audit") || strings.Contains(out, "acme-reporting") {
+		t.Fatalf("list by client:\n%s", out)
+	}
+
+	out = mustRun(t, "client", "show", "acme")
+	if !strings.Contains(out, "Engagements") || !strings.Contains(out, "day @ 650.00") {
+		t.Fatalf("client show:\n%s", out)
+	}
+
+	if out := mustRun(t, "engagement", "done", "reporting"); out != "Reporting module is now done\n" {
+		t.Fatalf("done: %q", out)
+	}
+	if out := mustRun(t, "engagement", "show", "reporting"); !strings.Contains(out, "End") {
+		t.Fatalf("show after done:\n%s", out)
+	}
+}

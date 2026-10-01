@@ -84,7 +84,7 @@ Every record is a file you can open, grep, diff and edit by hand.`,
 	root.PersistentFlags().StringVar(&a.root, "root", "", "directory holding the records (default from config, or $MAVIS_ROOT)")
 	root.PersistentFlags().BoolVar(&a.jsonOut, "json", false, "output JSON")
 
-	root.AddCommand(newInitCommand(a), newClientCommand(a))
+	root.AddCommand(newInitCommand(a), newClientCommand(a), newEngagementCommand(a))
 	return root
 }
 

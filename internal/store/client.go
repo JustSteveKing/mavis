@@ -157,36 +157,15 @@ func (s *Store) AddClient(in NewClient) (Client, error) {
 }
 
 // ResolveClient finds a client by exact slug, or by a substring of its slug
-// or name that matches exactly one. Guessing between several is refused.
+// or name that matches exactly one.
 func (s *Store) ResolveClient(query string) (Client, error) {
 	clients, _, err := s.Clients()
 	if err != nil {
 		return Client{}, err
 	}
-	for _, c := range clients {
-		if c.Slug == query {
-			return c, nil
-		}
-	}
-
-	q := strings.ToLower(query)
-	var matches []Client
-	for _, c := range clients {
-		if strings.Contains(c.Slug, q) || strings.Contains(strings.ToLower(c.Name), q) {
-			matches = append(matches, c)
-		}
-	}
-	switch len(matches) {
-	case 0:
-		return Client{}, fmt.Errorf("client %q: %w", query, ErrNotFound)
-	case 1:
-		return matches[0], nil
-	}
-	amb := &AmbiguousError{Query: query}
-	for _, c := range matches {
-		amb.Candidates = append(amb.Candidates, c.Slug)
-	}
-	return Client{}, amb
+	return resolve("client", query, clients,
+		func(c Client) string { return c.Slug },
+		func(c Client) string { return c.Name })
 }
 
 // SetClientStatus moves a client and stamps status_since. Moving a client to
