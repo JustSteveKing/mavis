@@ -179,6 +179,8 @@ func newClientShowCommand(a *app) *cobra.Command {
 				{"Country", c.Country},
 				{"VAT number", c.VATNumber},
 				{"VAT", c.Treatment()},
+				{"Peppol ID", c.PeppolID},
+				{"Buyer ref", c.BuyerReference},
 				{"File", c.Path},
 			} {
 				if row[1] != "" {
@@ -246,7 +248,7 @@ func firstLine(s string) string {
 
 func newClientSetCommand(a *app) *cobra.Command {
 	var u store.ClientUpdate
-	var name, contact, email, phone, currency, country, vatNumber, vatTreatment string
+	var name, contact, email, phone, currency, country, vatNumber, vatTreatment, peppolID, buyerRef string
 	var terms int
 	var address []string
 	cmd := &cobra.Command{
@@ -271,6 +273,7 @@ for GB, reverse charge for anywhere else.`,
 				"name": {&u.Name, &name}, "contact": {&u.Contact, &contact}, "email": {&u.Email, &email},
 				"phone": {&u.Phone, &phone}, "currency": {&u.Currency, &currency}, "country": {&u.Country, &country},
 				"vat-number": {&u.VATNumber, &vatNumber}, "vat-treatment": {&u.VATTreatment, &vatTreatment},
+				"peppol-id": {&u.PeppolID, &peppolID}, "buyer-reference": {&u.BuyerReference, &buyerRef},
 			} {
 				if f.Changed(flag) {
 					*target.dst = target.val
@@ -311,5 +314,7 @@ for GB, reverse charge for anywhere else.`,
 	f.StringVar(&country, "country", "", "two-letter code, e.g. GB")
 	f.StringVar(&vatNumber, "vat-number", "", "the client's VAT number")
 	f.StringVar(&vatTreatment, "vat-treatment", "", "override: "+strings.Join(store.VATTreatments, ", "))
+	f.StringVar(&peppolID, "peppol-id", "", "for e-invoices: their Peppol participant, scheme:value, e.g. 9932:GB123456789")
+	f.StringVar(&buyerRef, "buyer-reference", "", "for e-invoices: the reference they want on invoices, e.g. a PO number")
 	return cmd
 }

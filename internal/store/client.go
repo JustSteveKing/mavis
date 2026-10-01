@@ -37,6 +37,12 @@ type Client struct {
 	VATNumber    string   `json:"vat_number,omitempty"`
 	VATTreatment string   `json:"vat_treatment,omitempty"` // as set; see Treatment
 
+	// For e-invoices: the client's Peppol participant (scheme:value), and the
+	// buyer reference Peppol requires on every invoice (PEPPOL-EN16931-R003),
+	// often a purchase order or a cost centre they give you.
+	PeppolID       string `json:"peppol_id,omitempty"`
+	BuyerReference string `json:"buyer_reference,omitempty"`
+
 	Path string `json:"path"`
 }
 
@@ -80,6 +86,9 @@ func clientFrom(path string, d *record.Document) Client {
 		Country:      strings.ToUpper(d.Get("country")),
 		VATNumber:    d.Get("vat_number"),
 		VATTreatment: d.Get("vat_treatment"),
+
+		PeppolID:       d.Get("peppol_id"),
+		BuyerReference: d.Get("buyer_reference"),
 
 		Path: path,
 	}
@@ -235,9 +244,14 @@ func (s *Store) SetClientStatus(query, status string) (Client, bool, error) {
 type ClientUpdate struct {
 	Name, Contact, Email, Phone, Currency *string
 	Country, VATNumber, VATTreatment      *string
+	PeppolID, BuyerReference              *string
 	TermsDays                             *int
 	Address                               []string // nil leaves it alone
 }
+
+// PeppolIDPattern is scheme:value, the scheme being a four-digit code from
+// the EAS list.
+var PeppolIDPattern = regexp.MustCompile(`^\d{4}:\S+$`)
 
 var (
 	countryPattern  = regexp.MustCompile(`^[A-Z]{2}$`)
@@ -263,6 +277,9 @@ func (s *Store) SetClient(query string, u ClientUpdate) (Client, error) {
 	if u.VATTreatment != nil && *u.VATTreatment != "" && !slices.Contains(VATTreatments, *u.VATTreatment) {
 		return Client{}, fmt.Errorf("vat treatment must be one of %s", strings.Join(VATTreatments, ", "))
 	}
+	if u.PeppolID != nil && *u.PeppolID != "" && !PeppolIDPattern.MatchString(*u.PeppolID) {
+		return Client{}, fmt.Errorf("peppol id %q: use scheme:value, like 9932:GB123456789", *u.PeppolID)
+	}
 	if u.TermsDays != nil && *u.TermsDays <= 0 {
 		return Client{}, fmt.Errorf("terms must be at least one day")
 	}
@@ -285,7 +302,7 @@ func (s *Store) SetClient(query string, u ClientUpdate) (Client, error) {
 		}{
 			{"name", u.Name}, {"contact", u.Contact}, {"email", u.Email}, {"phone", u.Phone},
 			{"currency", u.Currency}, {"country", u.Country}, {"vat_number", u.VATNumber},
-			{"vat_treatment", u.VATTreatment},
+			{"vat_treatment", u.VATTreatment}, {"peppol_id", u.PeppolID}, {"buyer_reference", u.BuyerReference},
 		} {
 			key, v := f.key, f.v
 			switch {

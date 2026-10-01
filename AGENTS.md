@@ -149,6 +149,19 @@ status after.
 `FromQuote` map onto it, so the layout exists once. Units mavis writes (day,
 hour, month) are pluralised on the page; units typed by hand are not.
 
+**`internal/ubl` writes Peppol BIS 3.0 UBL**, mirroring einvoicing.dev's
+`UblWriter` (api.einvoicing.dev) so the same invoice comes out the same
+from either: same element order, same categories (S, Z, AE with
+`VATEX-EU-AE`), same unit codes. `Check` runs first and reports gaps under
+their Peppol or EN 16931 rule ids; `Write` refuses a document `Check` finds
+wanting. The tests validate every document against the official UBL 2.1
+XSDs, vendored in `internal/ubl/testdata/xsd`, with `xmllint`. CI installs
+it and sets `MAVIS_REQUIRE_XMLLINT` so a missing validator fails the build
+instead of skipping. The Peppol Schematron rules are not run here; they
+need the KoSIT validator. E-invoicing is opt-in: `issue` only attempts UBL
+once `business.peppol_id` is set, so freelancers not on Peppol never see it.
+Peppol IDs are never derived from VAT numbers.
+
 **Invoice numbers are derived** from existing files (`nextNumber`), per year
 of the issue date, under the store lock. There is no counter. A gap would
 need a deleted issued invoice, and issued invoices cannot be discarded.

@@ -34,6 +34,12 @@ jobs:
             exit 1
           fi
 
+      # The UBL tests validate every document against the official XSDs
+      # with xmllint. macOS ships it; Ubuntu runners may not.
+      - name: Install xmllint
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libxml2-utils
+
       - run: go build ./...
       - run: go vet ./...
 
@@ -41,3 +47,5 @@ jobs:
       # lock because flock does not serialise goroutines, and that is only
       # visible under the detector.
       - run: go test -race ./...
+        env:
+          MAVIS_REQUIRE_XMLLINT: "1"

@@ -3,12 +3,14 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/JustSteveKing/mavis/internal/money"
 	"github.com/JustSteveKing/mavis/internal/pdf"
 	"github.com/JustSteveKing/mavis/internal/store"
+	"github.com/JustSteveKing/mavis/internal/ubl"
 	"github.com/spf13/cobra"
 )
 
@@ -26,6 +28,7 @@ func newInvoiceCommand(a *app) *cobra.Command {
 		newInvoiceDiscardCommand(a),
 		newInvoiceIssueCommand(a),
 		newInvoicePDFCommand(a),
+		newInvoiceUBLCommand(a),
 		newInvoiceCreditCommand(a),
 		newInvoicePaidCommand(a, true),
 		newInvoicePaidCommand(a, false),
@@ -343,7 +346,7 @@ apart from being marked paid; mistakes are corrected with a credit note.`,
 			}
 			b := a.cfg.Business
 			inv, err := s.IssueInvoice(args[0], store.IssueOptions{
-				Issuer:            store.Issuer{Name: b.Name, Address: b.Address, VATNumber: b.VATNumber, Email: b.Email},
+				Issuer:            store.Issuer{Name: b.Name, Address: b.Address, Country: b.Country, VATNumber: b.VATNumber, Email: b.Email, PeppolID: b.PeppolID},
 				ReverseChargeNote: a.cfg.Invoicing.ReverseChargeNote,
 				Date:              date,
 				TaxPoint:          taxPoint,
@@ -352,11 +355,22 @@ apart from being marked paid; mistakes are corrected with a credit note.`,
 				return err
 			}
 			path, pdfErr := pdf.Write(s.Root(), inv)
+			// Setting your own Peppol ID is how you opt in to e-invoices;
+			// until then, issuing says nothing about them.
+			var xmlPath string
+			var missing []ubl.Missing
+			var xmlErr error
+			einvoicing := a.cfg.Business.PeppolID != ""
+			if einvoicing {
+				xmlPath, missing, xmlErr = a.writeUBL(s, inv)
+			}
 			if a.jsonOut {
 				return a.emitJSON(struct {
 					store.Invoice
-					PDF string `json:"pdf,omitempty"`
-				}{inv, path})
+					PDF     string        `json:"pdf,omitempty"`
+					UBL     string        `json:"ubl,omitempty"`
+					Missing []ubl.Missing `json:"ubl_missing,omitempty"`
+				}{inv, path, xmlPath, missing})
 			}
 			if inv.Kind == "credit" {
 				a.printf("Issued %s to %s, crediting %s: %s %s\n", inv.Number, inv.ToName, inv.Credits, inv.Total.Display(), inv.Currency)
@@ -367,6 +381,12 @@ apart from being marked paid; mistakes are corrected with a credit note.`,
 				return fmt.Errorf("%s is issued, but its PDF failed: %w; try mavis invoice pdf %s", inv.Number, pdfErr, inv.Number)
 			}
 			a.printf("%s\n", path)
+			if einvoicing {
+				a.reportUBL(inv, xmlPath, missing)
+			}
+			if xmlErr != nil {
+				return fmt.Errorf("%s is issued, but its e-invoice failed: %w; try mavis invoice ubl %s", inv.Number, xmlErr, inv.Number)
+			}
 			return nil
 		},
 	}
@@ -505,4 +525,111 @@ billed again, correctly. A part-credited one still covers it.`,
 	cmd.Flags().BoolVar(&full, "full", false, "credit every line of the invoice")
 	cmd.Flags().StringArrayVar(&lines, "line", nil, `credit part: "description=price" or "description=qty x price unit"; repeatable`)
 	return cmd
+}
+
+// writeUBL writes an issued invoice's e-invoice beside its PDF when it has
+// everything Peppol needs, and otherwise says what it lacks. An invoice is
+// never held back for want of an e-invoice: they are not yet mandatory.
+func (a *app) writeUBL(s *store.Store, inv store.Invoice) (string, []ubl.Missing, error) {
+	if missing := ubl.Check(inv); len(missing) > 0 {
+		return "", missing, nil
+	}
+	var preceding *store.Invoice
+	if inv.Kind == "credit" {
+		if p, err := s.ResolveInvoice(inv.Credits); err == nil {
+			preceding = &p
+		}
+	}
+	data, err := ubl.Write(inv, preceding)
+	if err != nil {
+		return "", nil, err
+	}
+	dir := filepath.Join(s.Root(), pdf.Dir)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", nil, err
+	}
+	path := filepath.Join(dir, inv.Number+".xml")
+	if err := os.WriteFile(path+".tmp", data, 0o644); err != nil {
+		return "", nil, err
+	}
+	return path, nil, os.Rename(path+".tmp", path)
+}
+
+func (a *app) reportUBL(inv store.Invoice, path string, missing []ubl.Missing) {
+	if path != "" {
+		a.printf("%s\n", path)
+		return
+	}
+	a.printf("\nNo e-invoice yet; Peppol needs:\n")
+	for _, m := range missing {
+		a.printf("  %s\n", m)
+	}
+	a.printf("Then: mavis invoice ubl %s\n", inv.Number)
+}
+
+func newInvoiceUBLCommand(a *app) *cobra.Command {
+	return &cobra.Command{
+		Use:   "ubl <invoice>",
+		Short: "Write an issued invoice as a Peppol e-invoice",
+		Long: `Writes .invoices/<number>.xml: Peppol BIS Billing 3.0, UBL 2.1, for an
+issued invoice or credit note. Once business.peppol_id is set in the
+config, issue does this itself whenever it can; until then, e-invoices are
+only made when asked for here.
+
+A document Peppol would reject is not written. Instead this lists what is
+missing, each with the rule it breaks and how to fill it: your Peppol ID
+(business.peppol_id), the client's (client set --peppol-id), and a buyer
+reference (client set --buyer-reference). Peppol IDs are scheme:value, such
+as 9932:GB123456789 for a UK VAT number, and are never guessed from a VAT
+number: 9932:GB123456789 and 9932:123456789 are different participants.
+
+Identifiers come from the invoice where it recorded them at issue. For one
+issued before they were set, the current config and client are used.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			s, err := a.openStore()
+			if err != nil {
+				return err
+			}
+			inv, err := s.ResolveInvoice(args[0])
+			if err != nil {
+				return err
+			}
+			// Identifiers, not legal content: fill gaps in an older invoice
+			// from what is set now.
+			if c, err := s.ResolveClient(inv.Client); err == nil {
+				if inv.ToPeppolID == "" {
+					inv.ToPeppolID = c.PeppolID
+				}
+				if inv.BuyerReference == "" {
+					inv.BuyerReference = c.BuyerReference
+				}
+				if inv.ToCountry == "" && c.Country != "" {
+					inv.ToCountry = c.Country
+				}
+			}
+			if inv.From.PeppolID == "" {
+				inv.From.PeppolID = a.cfg.Business.PeppolID
+			}
+			if inv.From.Country == "" {
+				inv.From.Country = a.cfg.Business.Country
+			}
+			path, missing, err := a.writeUBL(s, inv)
+			if err != nil {
+				return err
+			}
+			if a.jsonOut {
+				return a.emitJSON(struct {
+					UBL     string        `json:"ubl,omitempty"`
+					Missing []ubl.Missing `json:"missing,omitempty"`
+				}{path, missing})
+			}
+			if len(missing) > 0 {
+				a.reportUBL(inv, "", missing)
+				return fmt.Errorf("%s is not ready to send as an e-invoice", inv.Number)
+			}
+			a.printf("%s\n", path)
+			return nil
+		},
+	}
 }

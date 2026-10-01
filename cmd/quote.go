@@ -270,7 +270,7 @@ The client's address is not required: a prospect may not have given one.`,
 			}
 			b := a.cfg.Business
 			q, err := s.SendQuote(args[0], store.IssueOptions{
-				Issuer:            store.Issuer{Name: b.Name, Address: b.Address, VATNumber: b.VATNumber, Email: b.Email},
+				Issuer:            store.Issuer{Name: b.Name, Address: b.Address, Country: b.Country, VATNumber: b.VATNumber, Email: b.Email, PeppolID: b.PeppolID},
 				ReverseChargeNote: a.cfg.Invoicing.ReverseChargeNote,
 				Date:              date,
 			})

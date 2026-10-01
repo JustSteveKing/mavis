@@ -61,7 +61,14 @@ type Invoice struct {
 	ToName      string   `json:"to_name,omitempty"`
 	ToAddress   []string `json:"to_address,omitempty"`
 	ToVATNumber string   `json:"to_vat_number,omitempty"`
-	VATNote     string   `json:"vat_note,omitempty"`
+	ToCountry   string   `json:"to_country,omitempty"`
+	ToPeppolID  string   `json:"to_peppol_id,omitempty"`
+
+	// BuyerReference is the client's reference for the invoice, which
+	// Peppol requires (PEPPOL-EN16931-R003). Set on a draft, or copied from
+	// the client at issue.
+	BuyerReference string `json:"buyer_reference,omitempty"`
+	VATNote        string `json:"vat_note,omitempty"`
 
 	Lines    []Line      `json:"lines"`
 	VATLines []VATLine   `json:"vat_lines"`
@@ -228,12 +235,17 @@ func invoiceFrom(path string, d *record.Document) (Invoice, error) {
 			Address:   d.List("from_address"),
 			VATNumber: d.Get("from_vat_number"),
 			Email:     d.Get("from_email"),
+			Country:   d.Get("from_country"),
+			PeppolID:  d.Get("from_peppol_id"),
 		},
-		ToName:      d.Get("to_name"),
-		ToAddress:   d.List("to_address"),
-		ToVATNumber: d.Get("to_vat_number"),
-		VATNote:     d.Get("vat_note"),
-		Path:        path,
+		ToName:         d.Get("to_name"),
+		ToAddress:      d.List("to_address"),
+		ToVATNumber:    d.Get("to_vat_number"),
+		ToCountry:      d.Get("to_country"),
+		ToPeppolID:     d.Get("to_peppol_id"),
+		BuyerReference: d.Get("buyer_reference"),
+		VATNote:        d.Get("vat_note"),
+		Path:           path,
 	}
 	for _, e := range d.List("engagements") {
 		inv.Engagements = append(inv.Engagements, linkTarget(e))

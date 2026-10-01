@@ -428,3 +428,42 @@ func TestQuoteToEngagementToInvoice(t *testing.T) {
 		t.Fatal("a quote cannot be answered twice")
 	}
 }
+
+func TestEInvoiceOnceOptedIn(t *testing.T) {
+	dir := setup(t)
+	cfg := os.Getenv("XDG_CONFIG_HOME") + "/mavis/config.yaml"
+	base, _ := os.ReadFile(cfg)
+	os.WriteFile(cfg, append(base, []byte("business:\n  name: Steve Ltd\n  address: [1 My Street, Leeds LS1 1AA]\n  vat_number: GB999999973\n  peppol_id: 9932:GB999999973\n")...), 0o644)
+	mustRun(t, "client", "add", "acme", "--name", "Acme Ltd")
+	mustRun(t, "client", "set", "acme", "--address", "1 High Street", "--address", "Manchester M1 1AA")
+	mustRun(t, "invoice", "new", "acme", "--line", "Workshop=1000")
+
+	out := mustRun(t, "invoice", "issue", "acme")
+	if !strings.Contains(out, "No e-invoice yet; Peppol needs:") || !strings.Contains(out, "PEPPOL-EN16931-R003") {
+		t.Fatalf("opted in, with gaps:\n%s", out)
+	}
+	if _, err := run(t, "invoice", "ubl", "INV-2026-001"); err == nil {
+		t.Fatal("ubl should fail while things are missing")
+	}
+
+	if _, err := run(t, "client", "set", "acme", "--peppol-id", "GB123"); err == nil {
+		t.Fatal("a Peppol ID without a scheme should be refused")
+	}
+	mustRun(t, "client", "set", "acme", "--peppol-id", "9932:GB123456789", "--buyer-reference", "PO-4471")
+	out = mustRun(t, "invoice", "ubl", "INV-2026-001")
+	if !strings.HasSuffix(strings.TrimSpace(out), ".invoices/INV-2026-001.xml") {
+		t.Fatalf("ubl: %q", out)
+	}
+	data, _ := os.ReadFile(dir + "/.invoices/INV-2026-001.xml")
+	for _, want := range []string{"<cbc:BuyerReference>PO-4471</cbc:BuyerReference>", `schemeID="9932">GB123456789<`, "<cbc:PostalZone>M1 1AA</cbc:PostalZone>"} {
+		if !strings.Contains(string(data), want) {
+			t.Errorf("missing %s", want)
+		}
+	}
+
+	// The next invoice, issued with everything set, gets its e-invoice at once.
+	mustRun(t, "invoice", "new", "acme", "--line", "More=500")
+	if out := mustRun(t, "invoice", "issue", "acme"); !strings.Contains(out, ".invoices/INV-2026-002.xml") {
+		t.Fatalf("issue with everything set:\n%s", out)
+	}
+}

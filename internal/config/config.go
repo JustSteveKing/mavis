@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -29,8 +30,14 @@ type Thresholds struct {
 type Business struct {
 	Name      string   `yaml:"name"`
 	Address   []string `yaml:"address"`
+	Country   string   `yaml:"country"` // two letters; GB unless set
 	VATNumber string   `yaml:"vat_number"`
 	Email     string   `yaml:"email"`
+	// PeppolID is how the Peppol network addresses you, scheme:value, such
+	// as 9932:GB123456789. Only needed for e-invoices, and never derived from
+	// the VAT number: 9932:GB123456789 and 9932:123456789 are different
+	// participants.
+	PeppolID string `yaml:"peppol_id"`
 }
 
 type Invoicing struct {
@@ -97,6 +104,10 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 
+	if c.Business.Country == "" {
+		c.Business.Country = "GB"
+	}
+	c.Business.Country = strings.ToUpper(c.Business.Country)
 	if c.Invoicing.ReverseChargeNote == "" {
 		c.Invoicing.ReverseChargeNote = DefaultReverseChargeNote
 	}

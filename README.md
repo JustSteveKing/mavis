@@ -33,7 +33,7 @@ and knew exactly who still owed you.
 mavis is early. What exists today is the client side (clients, engagements,
 the log of calls and notes, follow-ups, `today`), time tracking, stats, and
 quotes, and invoices from draft to PDF to paid, with credit notes to
-correct them. Time and invoicing are both optional: if you only want
+correct them and Peppol e-invoices beside them. Time and invoicing are both optional: if you only want
 somewhere to keep track of clients, you never have to meet either.
 
 ## Install
@@ -308,6 +308,39 @@ from last year gives you last year's invoice.
 The PDF uses the standard PDF fonts, which cover £, € and accented Latin
 letters but not other scripts.
 
+### E-invoices
+
+mavis can write each issued invoice and credit note as a Peppol e-invoice:
+BIS Billing 3.0, in UBL 2.1, saved beside its PDF as
+`.invoices/INV-2026-001.xml`. UK B2B e-invoicing is not mandatory yet, so
+this is opt-in. Setting your own Peppol ID is the switch:
+
+```yaml
+business:
+  peppol_id: 9932:GB123456789   # 9932 is the scheme for a UK VAT number
+```
+
+Then each client needs theirs, and a buyer reference, which Peppol requires
+on every invoice and most clients will give you as a purchase order number:
+
+```bash
+mavis client set acme --peppol-id 9932:GB123456789 --buyer-reference PO-4471
+```
+
+From then on `issue` writes the e-invoice whenever it can, and when it
+cannot, lists what is missing with the Peppol rule each gap breaks. A
+document Peppol would reject is never written. `mavis invoice ubl` writes
+one on demand, or explains why it cannot.
+
+Peppol IDs are never worked out from a VAT number, because
+`9932:GB123456789` and `9932:123456789` are different participants on the
+network and only one of them may be registered.
+
+A UK address that ends in a postcode has it read out as the postcode, and
+the town before it as the city. Reverse-charged invoices carry category
+`AE` with your reverse charge wording as the reason. mavis writes the
+e-invoice; it does not send it. Sending goes through a Peppol access point.
+
 Overdue invoices head `today`, and `stats` gains an invoices section once
 anything has been issued: issued and paid in the period, and what is unpaid
 now.
@@ -422,6 +455,8 @@ business:                     # you, as invoices name you
   address: [1 Your Street, Your Town, AB1 2CD]
   vat_number: GB123456789
   email: you@example.com
+  country: GB                 # where you are, for e-invoices
+  peppol_id: 9932:GB123456789 # opts in to e-invoices
 invoicing:
   reverse_charge_note: 'Reverse charge: the customer is to account for any VAT due.'
 thresholds:

@@ -17,8 +17,10 @@ import (
 type Issuer struct {
 	Name      string
 	Address   []string
+	Country   string
 	VATNumber string
 	Email     string
+	PeppolID  string
 }
 
 type IssueOptions struct {
@@ -169,10 +171,24 @@ func (s *Store) IssueInvoice(query string, o IssueOptions) (Invoice, error) {
 		if o.Issuer.Email != "" {
 			d.Set("from_email", o.Issuer.Email)
 		}
+		if o.Issuer.Country != "" {
+			d.Set("from_country", o.Issuer.Country)
+		}
+		if o.Issuer.PeppolID != "" {
+			d.Set("from_peppol_id", o.Issuer.PeppolID)
+		}
 		d.Set("to_name", client.Name)
 		d.SetList("to_address", client.Address)
 		if client.VATNumber != "" {
 			d.Set("to_vat_number", client.VATNumber)
+		}
+		d.Set("to_country", clientCountry(client))
+		if client.PeppolID != "" {
+			d.Set("to_peppol_id", client.PeppolID)
+		}
+		// A reference set on the draft by hand wins over the client's.
+		if d.Get("buyer_reference") == "" && client.BuyerReference != "" {
+			d.Set("buyer_reference", client.BuyerReference)
 		}
 		if inv.VATTreatment == "reverse-charge" {
 			d.Set("vat_note", o.ReverseChargeNote)
@@ -254,4 +270,13 @@ func checkFrozen(inv Invoice, net, vat, total string) error {
 		}
 	}
 	return nil
+}
+
+// clientCountry is where a client is, for documents that must say: GB
+// unless set, matching how VAT treatment reads a blank country.
+func clientCountry(c Client) string {
+	if c.Country == "" {
+		return "GB"
+	}
+	return c.Country
 }
