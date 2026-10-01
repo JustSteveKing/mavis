@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -29,7 +30,29 @@ type Client struct {
 	Currency    string `json:"currency"`
 	TermsDays   int    `json:"terms_days"`
 	Created     string `json:"created,omitempty"`
-	Path        string `json:"path"`
+
+	// Billing details. None is needed until the first invoice.
+	Address      []string `json:"address,omitempty"`
+	Country      string   `json:"country,omitempty"`
+	VATNumber    string   `json:"vat_number,omitempty"`
+	VATTreatment string   `json:"vat_treatment,omitempty"` // as set; see Treatment
+
+	Path string `json:"path"`
+}
+
+// VATTreatments are how a client's invoices are taxed.
+var VATTreatments = []string{"standard", "reverse-charge", "zero"}
+
+// Treatment is the VAT treatment for this client's invoices: what is set,
+// or standard for a UK client and reverse charge for anyone else.
+func (c Client) Treatment() string {
+	if c.VATTreatment != "" {
+		return c.VATTreatment
+	}
+	if c.Country == "" || c.Country == "GB" {
+		return "standard"
+	}
+	return "reverse-charge"
 }
 
 // NewClient is what `client add` supplies.
@@ -52,7 +75,13 @@ func clientFrom(path string, d *record.Document) Client {
 		Phone:       d.Get("phone"),
 		Currency:    d.Get("currency"),
 		Created:     d.Get("created"),
-		Path:        path,
+
+		Address:      d.List("address"),
+		Country:      strings.ToUpper(d.Get("country")),
+		VATNumber:    d.Get("vat_number"),
+		VATTreatment: d.Get("vat_treatment"),
+
+		Path: path,
 	}
 	if c.Name == "" {
 		c.Name = c.Slug
@@ -199,4 +228,89 @@ func (s *Store) SetClientStatus(query, status string) (Client, bool, error) {
 		return nil
 	})
 	return out, changed, err
+}
+
+// ClientUpdate changes some of a client's fields. A nil field is left alone;
+// a pointer to "" removes it.
+type ClientUpdate struct {
+	Name, Contact, Email, Phone, Currency *string
+	Country, VATNumber, VATTreatment      *string
+	TermsDays                             *int
+	Address                               []string // nil leaves it alone
+}
+
+var (
+	countryPattern  = regexp.MustCompile(`^[A-Z]{2}$`)
+	currencyPattern = regexp.MustCompile(`^[A-Z]{3}$`)
+)
+
+// SetClient applies an update to a client's note, keeping everything else
+// in the file as it was.
+func (s *Store) SetClient(query string, u ClientUpdate) (Client, error) {
+	upper := func(p *string) {
+		if p != nil {
+			*p = strings.ToUpper(strings.TrimSpace(*p))
+		}
+	}
+	upper(u.Country)
+	upper(u.Currency)
+	if u.Country != nil && *u.Country != "" && !countryPattern.MatchString(*u.Country) {
+		return Client{}, fmt.Errorf("country %q: use a two-letter code, like GB or DE", *u.Country)
+	}
+	if u.Currency != nil && !currencyPattern.MatchString(*u.Currency) {
+		return Client{}, fmt.Errorf("currency %q: use a three-letter code, like GBP or EUR", *u.Currency)
+	}
+	if u.VATTreatment != nil && *u.VATTreatment != "" && !slices.Contains(VATTreatments, *u.VATTreatment) {
+		return Client{}, fmt.Errorf("vat treatment must be one of %s", strings.Join(VATTreatments, ", "))
+	}
+	if u.TermsDays != nil && *u.TermsDays <= 0 {
+		return Client{}, fmt.Errorf("terms must be at least one day")
+	}
+
+	var out Client
+	err := s.withLock(func() error {
+		c, err := s.ResolveClient(query)
+		if err != nil {
+			return err
+		}
+		d, err := read(c.Path)
+		if err != nil {
+			return err
+		}
+		// A slice, not a map: new keys are appended in this order every
+		// time, so the file does not reshuffle from one run to the next.
+		for _, f := range []struct {
+			key string
+			v   *string
+		}{
+			{"name", u.Name}, {"contact", u.Contact}, {"email", u.Email}, {"phone", u.Phone},
+			{"currency", u.Currency}, {"country", u.Country}, {"vat_number", u.VATNumber},
+			{"vat_treatment", u.VATTreatment},
+		} {
+			key, v := f.key, f.v
+			switch {
+			case v == nil:
+			case *v == "":
+				d.Delete(key)
+			default:
+				d.Set(key, *v)
+			}
+		}
+		if u.TermsDays != nil {
+			d.SetPlain("terms_days", strconv.Itoa(*u.TermsDays))
+		}
+		if u.Address != nil {
+			if len(u.Address) == 0 {
+				d.Delete("address")
+			} else {
+				d.SetList("address", u.Address)
+			}
+		}
+		if err := write(c.Path, d); err != nil {
+			return err
+		}
+		out = clientFrom(c.Path, d)
+		return nil
+	})
+	return out, err
 }

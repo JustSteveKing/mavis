@@ -36,6 +36,9 @@ The sheet is a Markdown table: correct it by hand, or with ` + "`mavis time edit
 			if err != nil {
 				return err
 			}
+			if by, err := s.InvoiceCovering(e.Engagement, e.Date[:7]); err == nil && by != "" {
+				fmt.Fprintf(a.err, "warning: %s for %s is already on %s; this time is not on it\n", e.Engagement, e.Date[:7], by)
+			}
 			if a.jsonOut {
 				return a.emitJSON(e)
 			}

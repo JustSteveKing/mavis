@@ -68,7 +68,8 @@ func cells(line string) []string {
 // parseSheet reads the table rows of a timesheet body. The header and the
 // separator are recognised and skipped; any other row that does not read as
 // a date and a duration is reported with its line number and left out.
-func parseSheet(body string, dayMinutes int, engagement, client, sheet string) ([]TimeEntry, []error) {
+func parseSheet(d *record.Document, dayMinutes int, engagement, client, sheet string) ([]TimeEntry, []error) {
+	body := d.Body
 	var entries []TimeEntry
 	var errs []error
 	for i, line := range strings.Split(body, "\n") {
@@ -83,16 +84,16 @@ func parseSheet(body string, dayMinutes int, engagement, client, sheet string) (
 			continue
 		}
 		if len(c) < 2 {
-			errs = append(errs, fmt.Errorf("line %d: want | date | time | what |", i+1))
+			errs = append(errs, fmt.Errorf("line %d: want | date | time | what |", d.LineOf(i)))
 			continue
 		}
 		if _, err := time.Parse(dateLayout, c[0]); err != nil {
-			errs = append(errs, fmt.Errorf("line %d: %q is not a date (YYYY-MM-DD)", i+1, c[0]))
+			errs = append(errs, fmt.Errorf("line %d: %q is not a date (YYYY-MM-DD)", d.LineOf(i), c[0]))
 			continue
 		}
 		minutes, err := duration.Parse(c[1], dayMinutes)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("line %d: %w", i+1, err))
+			errs = append(errs, fmt.Errorf("line %d: %w", d.LineOf(i), err))
 			continue
 		}
 		e := TimeEntry{Date: c[0], Time: c[1], Minutes: minutes, Engagement: engagement, Client: client, Sheet: sheet}
@@ -131,7 +132,7 @@ func (s *Store) TimeEntries() ([]TimeEntry, []Problem, error) {
 			continue
 		}
 		sheet := strings.TrimSuffix(f.Name(), ".md")
-		entries, errs := parseSheet(d.Body, s.DayMinutes, linkTarget(d.Get("engagement")), linkTarget(d.Get("client")), sheet)
+		entries, errs := parseSheet(d, s.DayMinutes, linkTarget(d.Get("engagement")), linkTarget(d.Get("client")), sheet)
 		for _, e := range errs {
 			problems = append(problems, Problem{Path: path, Err: e})
 		}

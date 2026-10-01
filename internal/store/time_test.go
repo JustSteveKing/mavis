@@ -77,7 +77,7 @@ func TestHandEditedSheets(t *testing.T) {
 	if len(entries) != 2 || entries[1].Minutes != 225 || entries[1].What != "Aligned by an editor" {
 		t.Errorf("entries = %+v", entries)
 	}
-	if len(problems) != 1 || !strings.Contains(problems[0].Error(), "line 4") {
+	if len(problems) != 1 || !strings.Contains(problems[0].Error(), "line 10:") {
 		t.Errorf("problems = %v", problems)
 	}
 

@@ -181,3 +181,54 @@ func TestConcurrentAddsDoNotCollide(t *testing.T) {
 		t.Fatalf("%d adds succeeded for one slug, want exactly 1", ok)
 	}
 }
+
+func TestSetClientBillingDetails(t *testing.T) {
+	s := newStore(t)
+	c, _ := s.AddClient(NewClient{Slug: "acme", Phone: "+44 1"})
+	os.WriteFile(c.Path, append(mustRead(t, c.Path), []byte("Met at Laracon.\n")...), 0o644)
+
+	str := func(v string) *string { return &v }
+	terms := 14
+	got, err := s.SetClient("acme", ClientUpdate{
+		Address: []string{"1 High Street", "Manchester", "M1 1AA"},
+		Country: str("gb"), VATNumber: str("GB123456789"), TermsDays: &terms, Phone: str(""),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Address) != 3 || got.Country != "GB" || got.TermsDays != 14 || got.Phone != "" || got.Treatment() != "standard" {
+		t.Fatalf("got %+v", got)
+	}
+	data := string(mustRead(t, c.Path))
+	if !strings.Contains(data, "address: [1 High Street, Manchester, M1 1AA]") || !strings.HasSuffix(data, "Met at Laracon.\n") || strings.Contains(data, "phone") {
+		t.Fatalf("file:\n%s", data)
+	}
+
+	got, _ = s.SetClient("acme", ClientUpdate{Country: str("DE")})
+	if got.Treatment() != "reverse-charge" {
+		t.Errorf("an overseas client defaults to reverse charge, got %s", got.Treatment())
+	}
+	got, _ = s.SetClient("acme", ClientUpdate{VATTreatment: str("standard")})
+	if got.Treatment() != "standard" {
+		t.Errorf("an explicit treatment wins, got %s", got.Treatment())
+	}
+
+	for name, u := range map[string]ClientUpdate{
+		"country":   {Country: str("Germany")},
+		"currency":  {Currency: str("pounds")},
+		"treatment": {VATTreatment: str("exempt-ish")},
+	} {
+		if _, err := s.SetClient("acme", u); err == nil {
+			t.Errorf("%s: want an error", name)
+		}
+	}
+}
+
+func mustRead(t *testing.T, path string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
+}

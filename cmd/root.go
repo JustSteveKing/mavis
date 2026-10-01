@@ -100,6 +100,7 @@ Every record is a file you can open, grep, diff and edit by hand.`,
 		newTodayCommand(a),
 		newTimeCommand(a),
 		newStatsCommand(a),
+		newInvoiceCommand(a),
 	)
 	return root
 }

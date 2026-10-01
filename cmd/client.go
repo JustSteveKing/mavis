@@ -16,7 +16,7 @@ func newClientCommand(a *app) *cobra.Command {
 		Aliases: []string{"clients"},
 		Short:   "Add, list and move clients",
 	}
-	cmd.AddCommand(newClientAddCommand(a), newClientListCommand(a), newClientShowCommand(a))
+	cmd.AddCommand(newClientAddCommand(a), newClientListCommand(a), newClientShowCommand(a), newClientSetCommand(a))
 	for _, status := range store.ClientStatuses {
 		cmd.AddCommand(newClientMoveCommand(a, status))
 	}
@@ -175,6 +175,10 @@ func newClientShowCommand(a *app) *cobra.Command {
 				{"Email", c.Email},
 				{"Phone", c.Phone},
 				{"Terms", fmt.Sprintf("%d days, %s", c.TermsDays, c.Currency)},
+				{"Address", strings.Join(c.Address, ", ")},
+				{"Country", c.Country},
+				{"VAT number", c.VATNumber},
+				{"VAT", c.Treatment()},
 				{"File", c.Path},
 			} {
 				if row[1] != "" {
@@ -238,4 +242,74 @@ func firstLine(s string) string {
 		line = line[:69] + "..."
 	}
 	return line
+}
+
+func newClientSetCommand(a *app) *cobra.Command {
+	var u store.ClientUpdate
+	var name, contact, email, phone, currency, country, vatNumber, vatTreatment string
+	var terms int
+	var address []string
+	cmd := &cobra.Command{
+		Use:   "set <client>",
+		Short: "Change a client's details",
+		Long: `Changes only the fields given; everything else in the note, including
+anything added by hand, is kept. An empty value removes a field.
+
+Billing details (address, country, VAT number) are only needed once you
+invoice the client. VAT treatment follows the country unless set: standard
+for GB, reverse charge for anywhere else.`,
+		Example: `  mavis client set acme --address "1 High Street" --address "Manchester M1 1AA" --country GB
+  mavis client set globex --country DE --vat-number DE123456789
+  mavis client set acme --phone ""`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			f := cmd.Flags()
+			for flag, target := range map[string]struct {
+				dst **string
+				val *string
+			}{
+				"name": {&u.Name, &name}, "contact": {&u.Contact, &contact}, "email": {&u.Email, &email},
+				"phone": {&u.Phone, &phone}, "currency": {&u.Currency, &currency}, "country": {&u.Country, &country},
+				"vat-number": {&u.VATNumber, &vatNumber}, "vat-treatment": {&u.VATTreatment, &vatTreatment},
+			} {
+				if f.Changed(flag) {
+					*target.dst = target.val
+				}
+			}
+			if f.Changed("terms") {
+				u.TermsDays = &terms
+			}
+			if f.Changed("address") {
+				u.Address = address
+				if u.Address == nil || (len(address) == 1 && address[0] == "") {
+					u.Address = []string{}
+				}
+			}
+			s, err := a.openStore()
+			if err != nil {
+				return err
+			}
+			c, err := s.SetClient(args[0], u)
+			if err != nil {
+				return err
+			}
+			if a.jsonOut {
+				return a.emitJSON(c)
+			}
+			a.printf("Updated %s\n", c.Name)
+			return nil
+		},
+	}
+	f := cmd.Flags()
+	f.StringVar(&name, "name", "", "company or person name")
+	f.StringVar(&contact, "contact", "", "primary contact")
+	f.StringVar(&email, "email", "", "contact email")
+	f.StringVar(&phone, "phone", "", "contact phone")
+	f.StringVar(&currency, "currency", "", "three-letter code, e.g. GBP")
+	f.IntVar(&terms, "terms", 0, "payment terms in days")
+	f.StringArrayVar(&address, "address", nil, "an address line; repeat for each line, in order")
+	f.StringVar(&country, "country", "", "two-letter code, e.g. GB")
+	f.StringVar(&vatNumber, "vat-number", "", "the client's VAT number")
+	f.StringVar(&vatTreatment, "vat-treatment", "", "override: "+strings.Join(store.VATTreatments, ", "))
+	return cmd
 }

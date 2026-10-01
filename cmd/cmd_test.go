@@ -254,3 +254,66 @@ func TestStats(t *testing.T) {
 		t.Error("a backwards range should fail")
 	}
 }
+
+func TestInvoiceDrafts(t *testing.T) {
+	setup(t)
+	mustRun(t, "client", "add", "acme", "--name", "Acme Ltd")
+	mustRun(t, "client", "set", "acme", "--address", "1 High Street", "--address", "Manchester M1 1AA", "--country", "gb")
+	mustRun(t, "engagement", "add", "acme", "reporting", "--title", "Reporting", "--basis", "day", "--rate", "650")
+	mustRun(t, "time", "reporting", "2d", "--date", "2026-10-06")
+
+	out := mustRun(t, "invoice", "new", "acme", "--month", "2026-10", "--line", "Workshop=2 x 500 day")
+	for _, want := range []string{"Drafted draft-acme-2026-10", "Reporting, October 2026", "1,300.00", "Workshop", "1,000.00", "VAT 20%", "460.00", "2,760.00 GBP"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("new: missing %q:\n%s", want, out)
+		}
+	}
+	if out := mustRun(t, "invoice", "list"); !strings.Contains(out, "draft-acme-2026-10") || !strings.Contains(out, "draft") {
+		t.Errorf("list:\n%s", out)
+	}
+	if out := mustRun(t, "invoice", "show", "acme-2026"); !strings.Contains(out, "October 2026 · GBP · VAT standard") {
+		t.Errorf("show:\n%s", out)
+	}
+	if out := mustRun(t, "client", "show", "acme"); !strings.Contains(out, "1 High Street, Manchester M1 1AA") || !strings.Contains(out, "GB") {
+		t.Errorf("client show:\n%s", out)
+	}
+
+	// Time logged into a month already on an invoice draws a warning.
+	root := NewRootCommand("test")
+	var stdout, stderr bytes.Buffer
+	root.SetOut(&stdout)
+	root.SetErr(&stderr)
+	root.SetArgs([]string{"time", "reporting", "1d", "--date", "2026-10-20"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stderr.String(), "already on draft-acme-2026-10") {
+		t.Errorf("no warning: %q", stderr.String())
+	}
+
+	if out := mustRun(t, "invoice", "discard", "acme-2026-10"); out != "Discarded draft-acme-2026-10\n" {
+		t.Errorf("discard: %q", out)
+	}
+}
+
+func TestParseLineFlag(t *testing.T) {
+	for in, want := range map[string]string{
+		"Milestone=4000":          "Milestone|||4000",
+		"Workshop=2 x 500 day":    "Workshop|2|day|500",
+		"Train fare = 84.50":      "Train fare|||84.50",
+		"Licence=12 x 9.99 seats": "Licence|12|seats|9.99",
+	} {
+		ml, err := parseLineFlag(in)
+		if err != nil {
+			t.Fatalf("%q: %v", in, err)
+		}
+		if got := ml.Description + "|" + ml.Qty + "|" + ml.Unit + "|" + ml.Price; got != want {
+			t.Errorf("%q = %q, want %q", in, got, want)
+		}
+	}
+	for _, bad := range []string{"no equals", "=400", "Thing="} {
+		if _, err := parseLineFlag(bad); err == nil {
+			t.Errorf("%q should fail", bad)
+		}
+	}
+}

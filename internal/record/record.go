@@ -21,6 +21,8 @@ const delimiter = "---"
 type Document struct {
 	front *yaml.Node // always a mapping node
 	Body  string
+
+	bodyLine int // lines in the file before the body, as read
 }
 
 // New returns an empty document.
@@ -59,6 +61,7 @@ func Parse(data []byte) (*Document, error) {
 
 	d := New()
 	d.Body = body
+	d.bodyLine = strings.Count(text[:len(text)-len(body)], "\n")
 	if strings.TrimSpace(front) == "" {
 		return d, nil
 	}
@@ -76,6 +79,10 @@ func Parse(data []byte) (*Document, error) {
 	d.front = doc.Content[0]
 	return d, nil
 }
+
+// LineOf turns a zero-based line index within the body into the line number
+// a person sees in an editor, counting the frontmatter above it.
+func (d *Document) LineOf(bodyIndex int) int { return d.bodyLine + bodyIndex + 1 }
 
 // Bytes renders the document.
 func (d *Document) Bytes() ([]byte, error) {
@@ -187,4 +194,15 @@ func (d *Document) Keys() []string {
 		keys = append(keys, c[i].Value)
 	}
 	return keys
+}
+
+// Delete removes a key and its value. Removing an absent key does nothing.
+func (d *Document) Delete(key string) {
+	c := d.front.Content
+	for i := 0; i+1 < len(c); i += 2 {
+		if c[i].Value == key {
+			d.front.Content = append(c[:i:i], c[i+2:]...)
+			return
+		}
+	}
 }

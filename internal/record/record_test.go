@@ -112,3 +112,20 @@ func TestListAcceptsALoneScalar(t *testing.T) {
 		t.Fatalf("List = %v", got)
 	}
 }
+
+func TestDelete(t *testing.T) {
+	d, _ := Parse([]byte("---\na: 1\nb: 2\nc: 3\n---\n"))
+	d.Delete("b")
+	d.Delete("missing")
+	out, _ := d.Bytes()
+	if string(out) != "---\na: 1\nc: 3\n---\n" {
+		t.Fatalf("got %q", out)
+	}
+}
+
+func TestLineOfCountsTheFrontmatter(t *testing.T) {
+	d, _ := Parse([]byte("---\na: 1\nb: 2\n---\nfirst\nsecond\n"))
+	if got := d.LineOf(1); got != 6 {
+		t.Fatalf("second body line is file line %d, want 6", got)
+	}
+}

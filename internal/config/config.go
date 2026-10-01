@@ -24,8 +24,28 @@ type Thresholds struct {
 	WarmToCold int `yaml:"warm_to_cold"`
 }
 
+// Business is you, as an invoice names you. Nothing here is needed until
+// the first invoice is issued.
+type Business struct {
+	Name      string   `yaml:"name"`
+	Address   []string `yaml:"address"`
+	VATNumber string   `yaml:"vat_number"`
+	Email     string   `yaml:"email"`
+}
+
+type Invoicing struct {
+	// ReverseChargeNote is printed on invoices to overseas business clients.
+	// The default is a placeholder: check it against how your accountant or
+	// FreeAgent words it before issuing a real invoice.
+	ReverseChargeNote string `yaml:"reverse_charge_note"`
+}
+
+const DefaultReverseChargeNote = "Reverse charge: the customer is to account for any VAT due."
+
 type Config struct {
 	Root       string     `yaml:"root"`
+	Business   Business   `yaml:"business"`
+	Invoicing  Invoicing  `yaml:"invoicing"`
 	Thresholds Thresholds `yaml:"thresholds"`
 	// DayHours is the length of a working day, for converting between days
 	// and hours. 7.5 unless set.
@@ -35,7 +55,11 @@ type Config struct {
 }
 
 func defaults() Config {
-	return Config{Thresholds: Thresholds{ActiveQuiet: 14, WarmKeepInTouch: 30, WarmToCold: 60}, DayHours: 7.5}
+	return Config{
+		Thresholds: Thresholds{ActiveQuiet: 14, WarmKeepInTouch: 30, WarmToCold: 60},
+		DayHours:   7.5,
+		Invoicing:  Invoicing{ReverseChargeNote: DefaultReverseChargeNote},
+	}
 }
 
 // Path is where the config file lives: $XDG_CONFIG_HOME/mavis/config.yaml,
@@ -73,6 +97,9 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 
+	if c.Invoicing.ReverseChargeNote == "" {
+		c.Invoicing.ReverseChargeNote = DefaultReverseChargeNote
+	}
 	if c.DayHours <= 0 || c.DayHours > 24 {
 		c.DayHours = defaults().DayHours
 	}
