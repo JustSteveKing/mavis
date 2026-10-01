@@ -31,8 +31,8 @@ Named for the 1920s private secretary, who took your calls, kept your diary
 and knew exactly who still owed you.
 
 mavis is early. What exists today is the client side (clients, engagements,
-the log of calls and notes, follow-ups, `today`), time tracking and stats.
-Invoicing comes next. Time and invoicing are both optional: if you only want
+the log of calls and notes, follow-ups, `today`), time tracking, stats, and
+invoice drafts. Issuing invoices, and the PDF, come next. Time and invoicing are both optional: if you only want
 somewhere to keep track of clients, you never have to meet either.
 
 ## Install
@@ -54,7 +54,7 @@ cd mavis && go build -ldflags "-X main.version=$(git describe --tags --always)" 
 mavis init ~/business
 ```
 
-That creates `clients/`, `engagements/`, `log/` and `time/` in `~/business` and
+That creates `clients/`, `engagements/`, `log/`, `time/` and `invoices/` in `~/business` and
 remembers it as your records directory. Run it inside an Obsidian vault and
 the records become notes in it.
 
@@ -85,6 +85,14 @@ A client has a temperature, and you set it:
 mavis client warm acme
 mavis client list --status warm
 mavis client show acme
+```
+
+Change anything else with `client set`, which touches only the fields you
+give and keeps whatever you added to the note by hand:
+
+```bash
+mavis client set acme --address "1 High Street" --address "Manchester M1 1AA" --country GB
+mavis client set acme --terms 14 --phone ""     # an empty value removes a field
 ```
 
 Moving a client stamps `status_since`, so you can see how long Acme has been
@@ -173,6 +181,49 @@ Fix a mistake by editing the table, in Obsidian or with
 number and left out of the totals, rather than hiding the rest of the sheet.
 New rows go at the end of the table, so a note you write under it stays put.
 
+## Invoices
+
+Invoices start as drafts:
+
+```console
+$ mavis invoice new acme --month 2026-10
+Drafted draft-acme-2026-10
+
+  DESCRIPTION                      QTY  UNIT   PRICE      VAT        AMOUNT
+  Bug fixes, October 2026         2.75  hour   90.00      20%        247.50
+  Reporting module, October 2026     5  day   650.00      20%      3,250.00
+                                                          Net      3,497.50
+                                                      VAT 20%        699.50
+                                                        Total  4,197.00 GBP
+```
+
+`--month` adds one line per engagement that has something to bill that
+month: day and hourly work from its timesheet at its rate, and a retainer's
+monthly rate if it was running. Fixed-price work is never billed from time;
+add the milestone by hand:
+
+```bash
+mavis invoice new initech --line "Rebuild: design milestone=4000"
+mavis invoice new acme --month 2026-10 --line "Workshop=2 x 500 day"
+```
+
+A month is never billed twice. An engagement that another invoice already
+covers for that month is left off and named, and logging time into a month
+that is already invoiced draws a warning, since that time is not on it.
+
+A draft is a table in `invoices/`, so change it in Obsidian or with
+`mavis invoice edit`. Amount is always worked out again from Qty and Price,
+so editing a quantity cannot leave a total wrong, and a line mavis cannot
+read is an error with its line number, never a line quietly dropped.
+`mavis invoice discard` deletes a draft.
+
+VAT follows the client. A client in the UK, or with no country set, is
+charged 20%. Anywhere else is reverse charged at 0%. `client set
+--vat-treatment` overrides either way.
+
+Nothing is numbered until an invoice is issued, and `invoice issue` is the
+next thing to be built. Address and VAT details are only checked then.
+
 ## Stats
 
 ```console
@@ -233,6 +284,7 @@ clients/acme.md
 engagements/acme-reporting.md
 log/2026-10-01-acme-call.md
 time/acme-reporting-2026-10.md
+invoices/draft-acme-2026-10.md
 ```
 
 A log entry looks like this:
@@ -276,13 +328,22 @@ are yours to add, and these are the defaults:
 ```yaml
 root: /home/you/business
 day_hours: 7.5
+business:                     # you, as invoices name you
+  name: Your Name Ltd
+  address: [1 Your Street, Your Town, AB1 2CD]
+  vat_number: GB123456789
+  email: you@example.com
+invoicing:
+  reverse_charge_note: 'Reverse charge: the customer is to account for any VAT due.'
 thresholds:
   active_quiet: 14
   warm_keep_in_touch: 30
   warm_to_cold: 60
 ```
 
-Everything but `root` is optional. `--root` or `MAVIS_ROOT` override `root` for
+Everything but `root` is optional, and nothing under `business` is needed
+until you issue an invoice. The reverse charge note above is a placeholder:
+check it against how your accountant words it before you rely on it. `--root` or `MAVIS_ROOT` override `root` for
 one command, and every command takes `--json`.
 
 ## Licence

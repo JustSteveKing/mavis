@@ -100,6 +100,26 @@ converts `1d`, `3h`, `1h30m` to minutes using `Store.DayMinutes`, set from
 later re-values old entries; that is intended, since a day rate is a rate per
 day, whatever a day is.
 
+**Invoices are notes with a lines table** (`internal/store/invoice.go`).
+Amount is never read back from the file; it is Qty times Price every time,
+so a hand edit cannot leave a stale total. Unlike a timesheet, a line that
+will not parse makes the whole invoice a `Problem`: dropping a line from an
+invoice is worse than refusing to read it. VAT is totalled per rate,
+rounding once per rate rather than per line.
+
+**Whether a month is billed is derived, not stamped.** An invoice records
+`period` and `engagements`; `linesForMonth` skips an engagement any invoice
+already covers for that month, and `InvoiceCovering` drives the warning in
+`mavis time`. Nothing is written to timesheets. Discarding a draft frees the
+month again, which is the point.
+
+**Bad table rows report file line numbers**, via `record.Document.LineOf`,
+which counts the frontmatter. Body-relative numbers were wrong in an editor.
+
+**Map iteration order is random; frontmatter key order must not be.** When
+a function sets several keys that may be new, iterate a slice. `SetClient`
+once used a map and would have reshuffled new keys on every run.
+
 **Money is never a float.** Files hold decimal strings (`"650.00"`);
 `internal/money` parses them to integer pence and refuses more than two
 decimal places rather than rounding. Multiply and divide with
