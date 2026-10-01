@@ -1,0 +1,133 @@
+// Package config loads ~/.config/mavis/config.yaml.
+//
+// The file is optional. Without it mavis still runs as long as a root is
+// given by flag or by $MAVIS_ROOT.
+package config
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"gopkg.in/yaml.v3"
+)
+
+// Thresholds are the quiet periods, in days, behind the nudges in `today`.
+type Thresholds struct {
+	// ActiveQuiet: an active client with no active engagement and no contact
+	// for this long is offered a move to warm.
+	ActiveQuiet int `yaml:"active_quiet"`
+	// WarmKeepInTouch: a warm client this quiet is listed to get in touch.
+	WarmKeepInTouch int `yaml:"warm_keep_in_touch"`
+	// WarmToCold: a warm client this quiet is offered a move to cold.
+	WarmToCold int `yaml:"warm_to_cold"`
+}
+
+type Config struct {
+	Root       string     `yaml:"root"`
+	Thresholds Thresholds `yaml:"thresholds"`
+
+	path string
+}
+
+func defaults() Config {
+	return Config{Thresholds: Thresholds{ActiveQuiet: 14, WarmKeepInTouch: 30, WarmToCold: 60}}
+}
+
+// Path is where the config file lives: $XDG_CONFIG_HOME/mavis/config.yaml,
+// falling back to ~/.config.
+func Path() (string, error) {
+	dir := os.Getenv("XDG_CONFIG_HOME")
+	if dir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		dir = filepath.Join(home, ".config")
+	}
+	return filepath.Join(dir, "mavis", "config.yaml"), nil
+}
+
+// Load reads the config file, filling anything it leaves out with defaults.
+// A missing file is not an error.
+func Load() (*Config, error) {
+	path, err := Path()
+	if err != nil {
+		return nil, err
+	}
+	c := defaults()
+	c.path = path
+
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return &c, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := yaml.Unmarshal(data, &c); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+
+	d := defaults().Thresholds
+	if c.Thresholds.ActiveQuiet <= 0 {
+		c.Thresholds.ActiveQuiet = d.ActiveQuiet
+	}
+	if c.Thresholds.WarmKeepInTouch <= 0 {
+		c.Thresholds.WarmKeepInTouch = d.WarmKeepInTouch
+	}
+	if c.Thresholds.WarmToCold <= 0 {
+		c.Thresholds.WarmToCold = d.WarmToCold
+	}
+	return &c, nil
+}
+
+// ResolveRoot picks the records directory: the flag, then $MAVIS_ROOT, then
+// the config file. The result is absolute.
+func (c *Config) ResolveRoot(flag string) (string, error) {
+	root := flag
+	if root == "" {
+		root = os.Getenv("MAVIS_ROOT")
+	}
+	if root == "" {
+		root = c.Root
+	}
+	if root == "" {
+		return "", errors.New("no records directory: run `mavis init` in it, or pass --root, or set MAVIS_ROOT")
+	}
+	return filepath.Abs(root)
+}
+
+// SaveRoot records root in the config file, creating it if needed. Anything
+// else already in the file is kept.
+func (c *Config) SaveRoot(root string) error {
+	var doc map[string]any
+	if data, err := os.ReadFile(c.path); err == nil {
+		if err := yaml.Unmarshal(data, &doc); err != nil {
+			return fmt.Errorf("%s: %w", c.path, err)
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if doc == nil {
+		doc = map[string]any{}
+	}
+	doc["root"] = root
+
+	out, err := yaml.Marshal(doc)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(c.path), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(c.path, out, 0o644); err != nil {
+		return err
+	}
+	c.Root = root
+	return nil
+}
+
+// File is the path this config was loaded from, or would be written to.
+func (c *Config) File() string { return c.path }

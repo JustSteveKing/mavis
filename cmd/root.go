@@ -6,10 +6,13 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 
+	"github.com/JustSteveKing/mavis/internal/config"
+	"github.com/JustSteveKing/mavis/internal/store"
 	"github.com/spf13/cobra"
 )
 
@@ -18,11 +21,39 @@ import (
 // A struct rather than package-level variables, so each NewRootCommand gets
 // its own flag targets and tests cannot leak state into one another.
 type app struct {
+	cfg     *config.Config
 	root    string
 	jsonOut bool
 
 	out io.Writer
 	err io.Writer
+}
+
+func (a *app) openStore() (*store.Store, error) {
+	root, err := a.cfg.ResolveRoot(a.root)
+	if err != nil {
+		return nil, err
+	}
+	return store.Open(root)
+}
+
+// emitJSON is the single place JSON output is produced, so every command's
+// machine-readable form is shaped the same way.
+func (a *app) emitJSON(v any) error {
+	enc := json.NewEncoder(a.out)
+	enc.SetIndent("", "  ")
+	return enc.Encode(v)
+}
+
+func (a *app) printf(format string, args ...any) {
+	fmt.Fprintf(a.out, format, args...)
+}
+
+// warn reports files that could not be read, without stopping the command.
+func (a *app) warn(problems []store.Problem) {
+	for _, p := range problems {
+		fmt.Fprintf(a.err, "warning: skipped %s\n", p)
+	}
 }
 
 func NewRootCommand(version string) *cobra.Command {
@@ -41,6 +72,11 @@ Every record is a file you can open, grep, diff and edit by hand.`,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			a.out = cmd.OutOrStdout()
 			a.err = cmd.ErrOrStderr()
+			cfg, err := config.Load()
+			if err != nil {
+				return err
+			}
+			a.cfg = cfg
 			return nil
 		},
 	}
@@ -48,6 +84,7 @@ Every record is a file you can open, grep, diff and edit by hand.`,
 	root.PersistentFlags().StringVar(&a.root, "root", "", "directory holding the records (default from config, or $MAVIS_ROOT)")
 	root.PersistentFlags().BoolVar(&a.jsonOut, "json", false, "output JSON")
 
+	root.AddCommand(newInitCommand(a), newClientCommand(a))
 	return root
 }
 
