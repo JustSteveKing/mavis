@@ -92,6 +92,7 @@ Every record is a file you can open, grep, diff and edit by hand.`,
 		newNoteCommand(a),
 		newFollowUpsCommand(a),
 		newDoneCommand(a),
+		newTodayCommand(a),
 	)
 	return root
 }

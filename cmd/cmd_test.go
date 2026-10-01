@@ -175,3 +175,28 @@ func TestDueNeedsMatchingFollowUps(t *testing.T) {
 		t.Error("mismatched --due count should fail")
 	}
 }
+
+func TestTodayOnAnEmptyBook(t *testing.T) {
+	setup(t)
+	if out := mustRun(t, "today"); out != "Nothing needs you today.\n" {
+		t.Fatalf("out = %q", out)
+	}
+}
+
+func TestTodayShowsOverdueAndActiveWork(t *testing.T) {
+	setup(t)
+	mustRun(t, "client", "add", "acme")
+	mustRun(t, "engagement", "add", "acme", "reporting", "--title", "Reporting module", "--basis", "day")
+	mustRun(t, "log", "call", "acme", "x", "-f", "Send estimate", "--due", "2020-01-01")
+
+	out := mustRun(t, "today")
+	for _, want := range []string{"Overdue", "Send estimate", "acme · due 2020-01-01", "days ago", "Active engagements", "Reporting module"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q:\n%s", want, out)
+		}
+	}
+	var parsed map[string]any
+	if err := json.Unmarshal([]byte(mustRun(t, "today", "--json")), &parsed); err != nil {
+		t.Fatal(err)
+	}
+}
