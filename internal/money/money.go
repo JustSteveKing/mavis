@@ -63,3 +63,41 @@ func Normalise(s string) (string, error) {
 	}
 	return p.String(), nil
 }
+
+// Display renders with thousands separators for reading: "12,500.00".
+func (p Pence) Display() string {
+	s := p.String()
+	sign := ""
+	if strings.HasPrefix(s, "-") {
+		sign, s = "-", s[1:]
+	}
+	whole, frac, _ := strings.Cut(s, ".")
+	var b strings.Builder
+	for i, r := range whole {
+		if i > 0 && (len(whole)-i)%3 == 0 {
+			b.WriteByte(',')
+		}
+		b.WriteRune(r)
+	}
+	return sign + b.String() + "." + frac
+}
+
+// MulDiv returns p * num / den, rounded half away from zero, without a float.
+func (p Pence) MulDiv(num, den int64) Pence {
+	if den == 0 {
+		return 0
+	}
+	n := int64(p) * num
+	neg := (n < 0) != (den < 0)
+	if n < 0 {
+		n = -n
+	}
+	if den < 0 {
+		den = -den
+	}
+	q := (n*2 + den) / (den * 2)
+	if neg {
+		q = -q
+	}
+	return Pence(q)
+}

@@ -99,6 +99,7 @@ Every record is a file you can open, grep, diff and edit by hand.`,
 		newDoneCommand(a),
 		newTodayCommand(a),
 		newTimeCommand(a),
+		newStatsCommand(a),
 	)
 	return root
 }

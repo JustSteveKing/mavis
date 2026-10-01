@@ -228,3 +228,29 @@ func TestTime(t *testing.T) {
 		t.Fatal("a bad duration should fail")
 	}
 }
+
+func TestStats(t *testing.T) {
+	setup(t)
+	mustRun(t, "client", "add", "acme")
+	mustRun(t, "client", "add", "initech")
+	mustRun(t, "engagement", "add", "acme", "reporting", "--title", "Reporting", "--basis", "day", "--rate", "650")
+	mustRun(t, "engagement", "add", "initech", "rebuild", "--title", "Rebuild", "--basis", "fixed", "--budget", "12000")
+	mustRun(t, "time", "reporting", "2d", "--date", "2026-10-06")
+	mustRun(t, "time", "rebuild", "3d", "--date", "2026-10-07")
+
+	out := mustRun(t, "stats", "--month", "2026-10")
+	for _, want := range []string{"October 2026", "Reporting", "1,300.00", "Fixed price, to date", "budget 12,000.00", "3d logged", "4,000.00 a day"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q:\n%s", want, out)
+		}
+	}
+	if out := mustRun(t, "stats", "--month", "2026-08"); !strings.Contains(out, "August 2026") {
+		t.Errorf("empty month:\n%s", out)
+	}
+	if _, err := run(t, "stats", "--month", "2026-10", "--year", "2026"); err == nil {
+		t.Error("two periods at once should fail")
+	}
+	if _, err := run(t, "stats", "--from", "2026-10-10", "--to", "2026-10-01"); err == nil {
+		t.Error("a backwards range should fail")
+	}
+}

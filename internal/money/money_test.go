@@ -30,3 +30,25 @@ func TestString(t *testing.T) {
 		}
 	}
 }
+
+func TestDisplay(t *testing.T) {
+	for p, want := range map[Pence]string{125000000: "1,250,000.00", 65000: "650.00", 100000: "1,000.00", -123456: "-1,234.56"} {
+		if got := p.Display(); got != want {
+			t.Errorf("%d.Display() = %q, want %q", p, got, want)
+		}
+	}
+}
+
+func TestMulDiv(t *testing.T) {
+	// 650.00 a day for 9h of a 7.5h day: 780.00
+	if got := Pence(65000).MulDiv(540, 450); got != 78000 {
+		t.Errorf("got %d", got)
+	}
+	// 100.00 / 3 rounds to 33.33; 200.00 / 3 rounds to 66.67
+	if got := Pence(10000).MulDiv(1, 3); got != 3333 {
+		t.Errorf("got %d", got)
+	}
+	if got := Pence(20000).MulDiv(1, 3); got != 6667 {
+		t.Errorf("got %d", got)
+	}
+}

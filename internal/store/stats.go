@@ -1,0 +1,256 @@
+package store
+
+import (
+	"fmt"
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/JustSteveKing/mavis/internal/money"
+)
+
+// Period is an inclusive range of days, YYYY-MM-DD.
+type Period struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+}
+
+func (p Period) contains(day string) bool { return day >= p.From && day <= p.To }
+
+// MonthPeriod is one calendar month, from YYYY-MM.
+func MonthPeriod(month string) (Period, error) {
+	t, err := time.Parse(monthLayout, month)
+	if err != nil {
+		return Period{}, fmt.Errorf("month %q: use YYYY-MM", month)
+	}
+	return Period{From: t.Format(dateLayout), To: t.AddDate(0, 1, -1).Format(dateLayout)}, nil
+}
+
+// YearPeriod is one calendar year, from YYYY.
+func YearPeriod(year string) (Period, error) {
+	t, err := time.Parse("2006", year)
+	if err != nil {
+		return Period{}, fmt.Errorf("year %q: use YYYY", year)
+	}
+	return Period{From: t.Format(dateLayout), To: t.AddDate(1, 0, -1).Format(dateLayout)}, nil
+}
+
+// EngagementStat is one engagement's time and value within a period.
+//
+// Value is time at the engagement's rate: never revenue, which only invoices
+// can answer. It is nil where it cannot be worked out: no rate, no basis, or
+// fixed-price work, whose fee does not belong to any one period.
+type EngagementStat struct {
+	Engagement string       `json:"engagement"`
+	Client     string       `json:"client"`
+	Title      string       `json:"title"`
+	Basis      string       `json:"basis,omitempty"`
+	Rate       string       `json:"rate,omitempty"`
+	Currency   string       `json:"currency"`
+	Minutes    int          `json:"minutes"`
+	Value      *money.Pence `json:"value,omitempty"`
+	PerDay     *money.Pence `json:"per_day,omitempty"`
+}
+
+// FixedStat is fixed-price work measured to date, not per period: what the
+// budget works out to per day logged so far.
+type FixedStat struct {
+	Engagement string       `json:"engagement"`
+	Client     string       `json:"client"`
+	Title      string       `json:"title"`
+	Status     string       `json:"status"`
+	Currency   string       `json:"currency"`
+	Budget     money.Pence  `json:"budget"`
+	Minutes    int          `json:"minutes"`
+	PerDay     *money.Pence `json:"per_day,omitempty"`
+}
+
+// Total is per currency. Amounts in different currencies are never added.
+type Total struct {
+	Currency string       `json:"currency"`
+	Minutes  int          `json:"minutes"`
+	Value    money.Pence  `json:"value"`
+	PerDay   *money.Pence `json:"per_day,omitempty"`
+}
+
+type Stats struct {
+	Period      Period           `json:"period"`
+	Minutes     int              `json:"minutes"`
+	Engagements []EngagementStat `json:"engagements"`
+	Totals      []Total          `json:"totals"`
+	Fixed       []FixedStat      `json:"fixed"`
+}
+
+// Stats works out time and its value for a period.
+//
+//   - day: days logged times the rate
+//   - hourly: hours logged times the rate
+//   - retainer: the monthly rate for each month of the period the engagement
+//     was running, whether or not time was logged
+//   - fixed: no value per period; reported to date in Fixed instead
+//
+// A total's per-day figure answers what logged time earned: value over days,
+// counting only engagements with both a value and time in the period. So
+// unpriced and fixed-price time does not drag it down, and a retainer with
+// nothing logged does not inflate it.
+func (s *Store) Stats(p Period) (Stats, []Problem, error) {
+	out := Stats{Period: p, Engagements: []EngagementStat{}, Totals: []Total{}, Fixed: []FixedStat{}}
+
+	clients, problems, err := s.Clients()
+	if err != nil {
+		return out, nil, err
+	}
+	engagements, pr, err := s.Engagements()
+	if err != nil {
+		return out, nil, err
+	}
+	problems = append(problems, pr...)
+	entries, pr, err := s.TimeEntries()
+	if err != nil {
+		return out, nil, err
+	}
+	problems = append(problems, pr...)
+
+	currency := map[string]string{}
+	for _, c := range clients {
+		currency[c.Slug] = c.Currency
+	}
+	inPeriod := map[string]int{}
+	toDate := map[string]int{}
+	for _, e := range entries {
+		toDate[e.Engagement] += e.Minutes
+		if p.contains(e.Date) {
+			inPeriod[e.Engagement] += e.Minutes
+			out.Minutes += e.Minutes
+		}
+	}
+
+	day := int64(s.DayMinutes)
+	totals := map[string]*Total{}
+	valuedMinutes := map[string]int{}
+	earned := map[string]money.Pence{}
+
+	for _, e := range engagements {
+		cur := currency[e.Client]
+		if cur == "" {
+			cur = "GBP"
+		}
+
+		if e.Basis == "fixed" {
+			if e.Budget != "" && (toDate[e.Slug] > 0 || e.Status == "active") {
+				budget, err := money.Parse(e.Budget)
+				if err != nil {
+					problems = append(problems, Problem{Path: e.Path, Err: fmt.Errorf("budget: %w", err)})
+					continue
+				}
+				f := FixedStat{Engagement: e.Slug, Client: e.Client, Title: e.Title, Status: e.Status, Currency: cur, Budget: budget, Minutes: toDate[e.Slug]}
+				if f.Minutes > 0 {
+					perDay := budget.MulDiv(day, int64(f.Minutes))
+					f.PerDay = &perDay
+				}
+				out.Fixed = append(out.Fixed, f)
+			}
+			if inPeriod[e.Slug] == 0 {
+				continue
+			}
+		}
+
+		months := 0
+		if e.Basis == "retainer" {
+			months = retainerMonths(e, p)
+		}
+		if inPeriod[e.Slug] == 0 && months == 0 {
+			continue
+		}
+
+		st := EngagementStat{Engagement: e.Slug, Client: e.Client, Title: e.Title, Basis: e.Basis, Rate: e.Rate, Currency: cur, Minutes: inPeriod[e.Slug]}
+		if rate, err := money.Parse(e.Rate); e.Rate != "" && err == nil {
+			var v money.Pence
+			ok := true
+			switch e.Basis {
+			case "day":
+				v = rate.MulDiv(int64(st.Minutes), day)
+			case "hourly":
+				v = rate.MulDiv(int64(st.Minutes), 60)
+			case "retainer":
+				v = rate.MulDiv(int64(months), 1)
+			default:
+				ok = false
+			}
+			if ok {
+				st.Value = &v
+				if st.Minutes > 0 {
+					perDay := v.MulDiv(day, int64(st.Minutes))
+					st.PerDay = &perDay
+				}
+			}
+		} else if e.Rate != "" {
+			problems = append(problems, Problem{Path: e.Path, Err: fmt.Errorf("rate: %w", err)})
+		}
+		out.Engagements = append(out.Engagements, st)
+
+		t := totals[cur]
+		if t == nil {
+			t = &Total{Currency: cur}
+			totals[cur] = t
+		}
+		t.Minutes += st.Minutes
+		if st.Value != nil {
+			t.Value += *st.Value
+			if st.Minutes > 0 {
+				valuedMinutes[cur] += st.Minutes
+				earned[cur] += *st.Value
+			}
+		}
+	}
+
+	slices.SortStableFunc(out.Engagements, func(a, b EngagementStat) int {
+		if c := strings.Compare(a.Client, b.Client); c != 0 {
+			return c
+		}
+		return strings.Compare(a.Engagement, b.Engagement)
+	})
+	for _, cur := range sortedKeys(totals) {
+		t := totals[cur]
+		if m := valuedMinutes[cur]; m > 0 {
+			perDay := earned[cur].MulDiv(day, int64(m))
+			t.PerDay = &perDay
+		}
+		out.Totals = append(out.Totals, *t)
+	}
+	return out, problems, nil
+}
+
+// retainerMonths counts the calendar months in p during which a retainer
+// was running: from its start (or, without one, the first month in p) to its
+// end, or open-ended if it has none. Proposed work has not started.
+func retainerMonths(e Engagement, p Period) int {
+	if e.Status == "proposed" {
+		return 0
+	}
+	from, to := p.From[:7], p.To[:7]
+	if len(e.Start) >= 7 && e.Start[:7] > from {
+		from = e.Start[:7]
+	}
+	if len(e.End) >= 7 && e.End[:7] < to {
+		to = e.End[:7]
+	}
+	if from > to {
+		return 0
+	}
+	f, err1 := time.Parse(monthLayout, from)
+	t, err2 := time.Parse(monthLayout, to)
+	if err1 != nil || err2 != nil {
+		return 0
+	}
+	return (t.Year()-f.Year())*12 + int(t.Month()-f.Month()) + 1
+}
+
+func sortedKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	return keys
+}

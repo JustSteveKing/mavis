@@ -31,7 +31,7 @@ Named for the 1920s private secretary, who took your calls, kept your diary
 and knew exactly who still owed you.
 
 mavis is early. What exists today is the client side (clients, engagements,
-the log of calls and notes, follow-ups, `today`) and time tracking.
+the log of calls and notes, follow-ups, `today`), time tracking and stats.
 Invoicing comes next. Time and invoicing are both optional: if you only want
 somewhere to keep track of clients, you never have to meet either.
 
@@ -172,6 +172,44 @@ Fix a mistake by editing the table, in Obsidian or with
 `mavis time edit reporting`. A row mavis cannot read is reported with its line
 number and left out of the totals, rather than hiding the rest of the sheet.
 New rows go at the end of the table, so a note you write under it stays put.
+
+## Stats
+
+```console
+$ mavis stats --month 2026-10
+October 2026
+
+CLIENT   ENGAGEMENT        BASIS                         TIME     VALUE   PER DAY
+acme     Bug fixes         hourly @ 90.00       0.37d (2h45m)    247.50    675.00
+acme     Reporting module  day @ 650.00           5d (37h30m)  3,250.00    650.00
+globex   Support           retainer @ 1,500.00      0.4d (3h)  1,500.00  3,750.00
+initech  Rebuild           fixed                2.5d (18h45m)         -         -
+Total                                             8.27d (62h)  4,997.50    866.62
+
+Fixed price, to date
+  initech  Rebuild  budget 12,000.00  10.5d logged  1,142.86 a day
+```
+
+`stats` shows the time you logged in a period and what it is worth at your
+rates. The default is this month; `--month`, `--year`, or `--from` and `--to`
+pick another, so a tax year is `--from 2026-04-06 --to 2027-04-05`.
+
+Value depends on the engagement's basis. Day and hourly work is time times
+the rate. A retainer counts its monthly rate for each month of the period it
+was running, whether or not you logged time against it.
+
+Fixed-price work gets no value for a period, because the fee does not belong
+to any one month. Give the engagement a `--budget` and it appears under
+**Fixed price, to date**: the budget over every day logged so far, which is
+the number that tells you whether a fixed bid is still paying.
+
+PER DAY on the total line counts only engagements with both a value and time
+in the period. Unpriced time does not drag it down, and a retainer with
+nothing logged does not push it up. Clients billed in different currencies
+get a total each; they are never added together.
+
+This is value, not revenue. What you actually invoiced and were paid is a
+question for invoices, which are not built yet.
 
 ## today
 

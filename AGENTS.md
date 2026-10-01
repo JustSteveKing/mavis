@@ -102,7 +102,21 @@ day, whatever a day is.
 
 **Money is never a float.** Files hold decimal strings (`"650.00"`);
 `internal/money` parses them to integer pence and refuses more than two
-decimal places rather than rounding.
+decimal places rather than rounding. Multiply and divide with
+`Pence.MulDiv`, which rounds half away from zero in integers.
+
+**Stats are value, never revenue.** `Store.Stats` values time at the
+engagement's rate; revenue needs invoices and must stay absent until they
+exist, not appear as a guess. Rules worth not relitigating:
+
+- Fixed-price work has no per-period value. A fee does not belong to a month.
+  It is reported to date in `Fixed`, as budget over days logged.
+- A retainer is worth its rate for every month of the period it ran,
+  logged time or not (`retainerMonths`).
+- A total's `PerDay` counts only rows with both value and time. An earlier
+  version counted a retainer with no time logged and reported a flattering
+  1,677.27 a day where the logged work earned 654.55.
+- Totals are per currency. Never add amounts across currencies.
 
 **The clock is `Store.Now`.** Tests replace it. Never call `time.Now()`
 inside the store.
