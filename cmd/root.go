@@ -38,7 +38,13 @@ func (a *app) openStore() (*store.Store, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := s.SetLayout(a.cfg.Layout); err != nil {
+		return nil, fmt.Errorf("%s: %w", a.cfg.File(), err)
+	}
 	s.DayMinutes = a.cfg.DayMinutes()
+	for _, w := range s.Stray() {
+		fmt.Fprintf(a.err, "warning: %s\n", w)
+	}
 	return s, nil
 }
 

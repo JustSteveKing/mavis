@@ -556,6 +556,30 @@ thresholds:
   warm_to_cold: 60
 ```
 
+### Layout
+
+The folder names are yours to change, so mavis can live inside a vault or
+folder that already has its own conventions:
+
+```yaml
+layout:
+  clients: CRM/People
+  log: CRM/Log
+  invoices: Admin/Invoices
+  files: .billing            # PDFs and e-invoices
+```
+
+Any you leave out keep their usual name. Folders are relative to the
+records folder, may nest, and must stay inside it; two kinds of record
+cannot share one. Set the layout before `mavis init` and it creates those
+folders.
+
+Changing the layout does not move anything: mavis does not own your
+folders. If records are left behind where the old layout kept them, every
+command says so, rather than showing you an empty list and letting you
+think they are gone. Links between records keep working whatever the
+layout, because Obsidian finds `[[acme]]` by its file name.
+
 Everything but `root` is optional, and nothing under `business` is needed
 until you issue an invoice. The reverse charge note above is a placeholder:
 check it against how your accountant words it before you rely on it. `--root` or `MAVIS_ROOT` override `root` for

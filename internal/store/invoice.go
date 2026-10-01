@@ -13,9 +13,6 @@ import (
 	"github.com/JustSteveKing/mavis/internal/record"
 )
 
-// InvoicesDir holds invoices as notes: a draft until issued, frozen after.
-const InvoicesDir = "invoices"
-
 // InvoiceStatuses: a draft can be edited and discarded; an issued invoice
 // is frozen apart from being marked paid.
 var InvoiceStatuses = []string{"draft", "issued", "paid"}
@@ -274,7 +271,7 @@ func invoiceFrom(path string, d *record.Document) (Invoice, error) {
 
 // Invoices lists every invoice, numbered ones in number order, then drafts.
 func (s *Store) Invoices() ([]Invoice, []Problem, error) {
-	dir := filepath.Join(s.root, InvoicesDir)
+	dir := filepath.Join(s.root, s.layout.Invoices)
 	files, err := os.ReadDir(dir)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil, nil
@@ -404,7 +401,7 @@ func (s *Store) AddInvoice(in NewInvoice) (Invoice, []Skipped, error) {
 			return fmt.Errorf("nothing to bill %s for %s", client.Slug, monthLabel)
 		}
 
-		dir := filepath.Join(s.root, InvoicesDir)
+		dir := filepath.Join(s.root, s.layout.Invoices)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return err
 		}
@@ -638,7 +635,7 @@ func (s *Store) AddCreditNote(query string, full bool, manual []ManualLine) (Inv
 			return fmt.Errorf("that credits %s, but only %s is left on %s", (net + tax).Display(), remaining.Display(), inv.Number)
 		}
 
-		path, err := freePath(filepath.Join(s.root, InvoicesDir), "draft-credit-"+strings.ToLower(inv.Number))
+		path, err := freePath(filepath.Join(s.root, s.layout.Invoices), "draft-credit-"+strings.ToLower(inv.Number))
 		if err != nil {
 			return err
 		}

@@ -140,7 +140,7 @@ func TestSetClientStatusStampsAndKeepsHandEdits(t *testing.T) {
 func TestListingSkipsNonClientsAndReportsBrokenFiles(t *testing.T) {
 	s := newStore(t)
 	s.AddClient(NewClient{Slug: "acme"})
-	dir := filepath.Join(s.Root(), ClientsDir)
+	dir := filepath.Join(s.Root(), s.Layout().Clients)
 	os.WriteFile(filepath.Join(dir, "README.md"), []byte("# How clients work\n"), 0o644)
 	os.WriteFile(filepath.Join(dir, "broken.md"), []byte("---\ntype: client\nunclosed\n"), 0o644)
 

@@ -24,15 +24,6 @@ import (
 	"github.com/gofrs/flock"
 )
 
-// Sections are the folders mavis owns, relative to the root.
-const (
-	ClientsDir     = "clients"
-	EngagementsDir = "engagements"
-	LogDir         = "log"
-)
-
-var sections = []string{ClientsDir, EngagementsDir, LogDir, TimeDir, InvoicesDir, QuotesDir}
-
 const dateLayout = "2006-01-02"
 
 type Store struct {
@@ -45,6 +36,8 @@ type Store struct {
 
 	// DayMinutes is a working day, for converting between days and hours.
 	DayMinutes int
+
+	layout Layout
 
 	// Actor, when set, is stamped as `by` on every record this store
 	// creates. The MCP server sets it to "agent", so a note an agent wrote
@@ -72,7 +65,7 @@ func Open(root string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Store{root: root, lock: flock.New(lockPath), Now: time.Now, DayMinutes: duration.DefaultDay}, nil
+	return &Store{root: root, lock: flock.New(lockPath), Now: time.Now, DayMinutes: duration.DefaultDay, layout: DefaultLayout()}, nil
 }
 
 // lockFile lives in the user cache rather than the records directory, so a
@@ -92,10 +85,15 @@ func lockFile(root string) (string, error) {
 
 func (s *Store) Root() string { return s.root }
 
-// Init creates the section folders. Running it again is harmless.
+// Init creates the folders the layout names for records. The files folder
+// is made when something is first written to it. Running it again is
+// harmless.
 func (s *Store) Init() error {
-	for _, dir := range sections {
-		if err := os.MkdirAll(filepath.Join(s.root, dir), 0o755); err != nil {
+	for _, f := range s.layout.fields() {
+		if f.name == "files" {
+			continue
+		}
+		if err := os.MkdirAll(filepath.Join(s.root, f.dir), 0o755); err != nil {
 			return err
 		}
 	}

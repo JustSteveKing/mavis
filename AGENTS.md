@@ -215,6 +215,16 @@ alone. `TestNoBackgroundQuery` in package main runs the built binary in a
 pty (creack/pty, test-only) and fails if the query goes out or startup takes
 seconds; removing the import makes it fail at 4s. Measured: 5.03s to 0.02s.
 
+**Folders come from `store.Layout`, never constants.** `s.layout.Clients`
+and its siblings, `s.FilesDir()` for PDFs and XML. The constants were
+removed so nothing can quietly use the old names; `pdf.Write` takes the
+files folder rather than the root. `Validate` refuses absolute paths,
+escapes, the root itself, and two kinds of record sharing or nesting in one
+folder, since records are told apart by folder as well as by `type`.
+`Stray` reports records left in a default folder the layout no longer
+points at; `openStore` prints it as a warning on every command. mavis never
+moves files to follow a layout change.
+
 **Invoice numbers are derived** from existing files (`nextNumber`), per year
 of the issue date, under the store lock. There is no counter. A gap would
 need a deleted issued invoice, and issued invoices cannot be discarded.

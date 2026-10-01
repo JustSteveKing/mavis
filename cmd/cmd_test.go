@@ -557,3 +557,35 @@ func TestABackdatedReminderIsTrueOnItsDay(t *testing.T) {
 		}
 	}
 }
+
+func TestLayoutFromConfig(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("MAVIS_ROOT", "")
+	cfg := os.Getenv("XDG_CONFIG_HOME") + "/mavis/config.yaml"
+	os.MkdirAll(os.Getenv("XDG_CONFIG_HOME")+"/mavis", 0o755)
+	os.WriteFile(cfg, []byte("layout:\n  clients: CRM/People\n  log: CRM/Log\n  files: .billing\nbusiness:\n  name: Steve\n  address: [1 My Street]\n  vat_number: GB999999973\n"), 0o644)
+
+	dir := t.TempDir()
+	mustRun(t, "init", dir)
+	for _, d := range []string{"CRM/People", "CRM/Log", "engagements", "invoices"} {
+		if _, err := os.Stat(dir + "/" + d); err != nil {
+			t.Errorf("init should create %s: %v", d, err)
+		}
+	}
+	mustRun(t, "client", "add", "acme")
+	mustRun(t, "client", "set", "acme", "--address", "1 High Street")
+	if _, err := os.Stat(dir + "/CRM/People/acme.md"); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, "invoice", "new", "acme", "--line", "Work=100")
+	out := mustRun(t, "invoice", "issue", "acme")
+	if !strings.Contains(out, "/.billing/INV-") {
+		t.Fatalf("the PDF should go to the layout's files folder:\n%s", out)
+	}
+
+	os.WriteFile(cfg, []byte("root: "+dir+"\nlayout:\n  clients: ../outside\n"), 0o644)
+	if _, err := run(t, "client", "list"); err == nil || !strings.Contains(err.Error(), "stay inside it") {
+		t.Fatalf("a bad layout should be refused: %v", err)
+	}
+}

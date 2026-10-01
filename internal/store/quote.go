@@ -14,9 +14,6 @@ import (
 	"github.com/JustSteveKing/mavis/internal/record"
 )
 
-// QuotesDir holds quotes: a draft until sent, frozen after.
-const QuotesDir = "quotes"
-
 // QuoteStatuses: expired is not among them. It is derived from valid_until,
 // so a quote does not have to be rewritten for time to pass.
 var QuoteStatuses = []string{"draft", "sent", "accepted", "declined"}
@@ -138,7 +135,7 @@ func quoteFrom(path string, d *record.Document) (Quote, error) {
 
 // Quotes lists every quote, numbered ones first in number order.
 func (s *Store) Quotes() ([]Quote, []Problem, error) {
-	dir := filepath.Join(s.root, QuotesDir)
+	dir := filepath.Join(s.root, s.layout.Quotes)
 	files, err := os.ReadDir(dir)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil, nil
@@ -232,7 +229,7 @@ func (s *Store) AddQuote(in NewQuote) (Quote, error) {
 			lines = append(lines, l)
 		}
 
-		dir := filepath.Join(s.root, QuotesDir)
+		dir := filepath.Join(s.root, s.layout.Quotes)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return err
 		}
@@ -334,7 +331,7 @@ func (s *Store) SendQuote(query string, o IssueOptions) (Quote, error) {
 			}
 		}
 		number := fmt.Sprintf("Q-%s-%03d", date[:4], high+1)
-		path := filepath.Join(s.root, QuotesDir, number+".md")
+		path := filepath.Join(s.root, s.layout.Quotes, number+".md")
 		if existing, err := s.findNote(number); err != nil {
 			return err
 		} else if existing != "" {

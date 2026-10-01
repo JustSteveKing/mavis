@@ -106,7 +106,7 @@ func logFrom(path string, d *record.Document) LogEntry {
 
 // Logs lists every log entry, oldest first.
 func (s *Store) Logs() ([]LogEntry, []Problem, error) {
-	dir := filepath.Join(s.root, LogDir)
+	dir := filepath.Join(s.root, s.layout.Log)
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil, nil
@@ -196,7 +196,7 @@ func (s *Store) AddLog(in NewLog) (LogEntry, error) {
 			engagement = e.Slug
 		}
 
-		dir := filepath.Join(s.root, LogDir)
+		dir := filepath.Join(s.root, s.layout.Log)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return err
 		}
@@ -374,7 +374,7 @@ func (s *Store) CompleteFollowUp(clientQuery, query string) (FollowUp, error) {
 		}
 
 		f := matches[0]
-		path := filepath.Join(s.root, LogDir, f.Log+".md")
+		path := filepath.Join(s.root, s.layout.Log, f.Log+".md")
 		d, err := read(path)
 		if err != nil {
 			return err
@@ -418,7 +418,7 @@ func (s *Store) Reminders(number string) ([]LogEntry, error) {
 func (s *Store) CompleteFollowUpExact(logSlug, text string) (FollowUp, error) {
 	var out FollowUp
 	err := s.withLock(func() error {
-		path := filepath.Join(s.root, LogDir, logSlug+".md")
+		path := filepath.Join(s.root, s.layout.Log, logSlug+".md")
 		d, err := read(path)
 		if err != nil {
 			return fmt.Errorf("log entry %q: %w", logSlug, ErrNotFound)

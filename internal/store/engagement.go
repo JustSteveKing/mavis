@@ -66,7 +66,7 @@ func engagementFrom(path string, d *record.Document) Engagement {
 
 // Engagements lists every engagement, sorted by slug.
 func (s *Store) Engagements() ([]Engagement, []Problem, error) {
-	dir := filepath.Join(s.root, EngagementsDir)
+	dir := filepath.Join(s.root, s.layout.Engagements)
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil, nil
@@ -131,10 +131,10 @@ func (s *Store) AddEngagement(in NewEngagement) (Engagement, error) {
 			return err
 		}
 		slug := client.Slug + "-" + in.Name
-		path := filepath.Join(s.root, EngagementsDir, slug+".md")
+		path := filepath.Join(s.root, s.layout.Engagements, slug+".md")
 		if existing, err := s.findNote(slug); err != nil {
 			return err
-		} else if existing == filepath.Join(EngagementsDir, slug+".md") {
+		} else if existing == filepath.Join(s.layout.Engagements, slug+".md") {
 			return fmt.Errorf("engagement %s already exists", slug)
 		} else if existing != "" {
 			return fmt.Errorf("%s already exists, and an engagement called %s would make [[%s]] ambiguous; pick another name", existing, slug, slug)

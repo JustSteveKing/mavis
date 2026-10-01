@@ -67,7 +67,7 @@ type NewClient struct {
 }
 
 func (s *Store) clientPath(slug string) string {
-	return filepath.Join(s.root, ClientsDir, slug+".md")
+	return filepath.Join(s.root, s.layout.Clients, slug+".md")
 }
 
 func clientFrom(path string, d *record.Document) Client {
@@ -109,7 +109,7 @@ func clientFrom(path string, d *record.Document) Client {
 // `type: client` (a README, say) are not clients and are skipped quietly;
 // files that fail to parse come back as problems.
 func (s *Store) Clients() ([]Client, []Problem, error) {
-	dir := filepath.Join(s.root, ClientsDir)
+	dir := filepath.Join(s.root, s.layout.Clients)
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil, nil
@@ -159,7 +159,7 @@ func (s *Store) AddClient(in NewClient) (Client, error) {
 		if existing, err := s.findNote(in.Slug); err != nil {
 			return err
 		} else if existing != "" {
-			if existing == filepath.Join(ClientsDir, in.Slug+".md") {
+			if existing == filepath.Join(s.layout.Clients, in.Slug+".md") {
 				return fmt.Errorf("client %s already exists", in.Slug)
 			}
 			return fmt.Errorf("%s already exists, and a client called %s would make [[%s]] ambiguous; pick another name", existing, in.Slug, in.Slug)

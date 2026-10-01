@@ -41,6 +41,9 @@ directory unless --force is given.`,
 			if err != nil {
 				return err
 			}
+			if err := s.SetLayout(a.cfg.Layout); err != nil {
+				return fmt.Errorf("%s: %w", a.cfg.File(), err)
+			}
 			if err := s.Init(); err != nil {
 				return err
 			}

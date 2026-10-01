@@ -277,7 +277,7 @@ The client's address is not required: a prospect may not have given one.`,
 			if err != nil {
 				return err
 			}
-			path, pdfErr := pdf.WriteQuote(s.Root(), q)
+			path, pdfErr := pdf.WriteQuote(s.FilesDir(), q)
 			if a.jsonOut {
 				return a.emitJSON(struct {
 					store.Quote
@@ -376,7 +376,7 @@ func newQuotePDFCommand(a *app) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			path, err := pdf.WriteQuote(s.Root(), q)
+			path, err := pdf.WriteQuote(s.FilesDir(), q)
 			if err != nil {
 				return err
 			}

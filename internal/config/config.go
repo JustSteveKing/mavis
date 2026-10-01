@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/JustSteveKing/mavis/internal/store"
 	"gopkg.in/yaml.v3"
 )
 
@@ -55,10 +56,11 @@ type Invoicing struct {
 const DefaultReverseChargeNote = "Reverse charge: the customer is to account for any VAT due."
 
 type Config struct {
-	Root       string     `yaml:"root"`
-	Business   Business   `yaml:"business"`
-	Invoicing  Invoicing  `yaml:"invoicing"`
-	Thresholds Thresholds `yaml:"thresholds"`
+	Root       string       `yaml:"root"`
+	Business   Business     `yaml:"business"`
+	Layout     store.Layout `yaml:"layout"`
+	Invoicing  Invoicing    `yaml:"invoicing"`
+	Thresholds Thresholds   `yaml:"thresholds"`
 	// DayHours is the length of a working day, for converting between days
 	// and hours. 7.5 unless set.
 	DayHours float64 `yaml:"day_hours"`

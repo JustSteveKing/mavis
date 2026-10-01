@@ -27,10 +27,6 @@ import (
 	"github.com/johnfercher/maroto/v2/pkg/props"
 )
 
-// Dir is where PDFs go, under the records root. Dot-prefixed so Obsidian
-// does not index binaries; see the vault's conventions.
-const Dir = ".invoices"
-
 var grey = &props.Color{Red: 110, Green: 110, Blue: 110}
 
 // Options are for tests: compression off leaves the text searchable.
@@ -282,24 +278,24 @@ func RenderDoc(doc Doc, o Options) ([]byte, error) {
 	return out.GetBytes(), nil
 }
 
-// Write renders an invoice into Dir under root and returns the path.
-func Write(root string, inv store.Invoice) (string, error) {
-	return WriteDoc(root, FromInvoice(inv), Name(inv.Number, inv.Slug))
+// Write renders an invoice into dir, the store's files folder, and returns
+// the path.
+func Write(dir string, inv store.Invoice) (string, error) {
+	return WriteDoc(dir, FromInvoice(inv), Name(inv.Number, inv.Slug))
 }
 
-// WriteQuote renders a quote into Dir under root and returns the path.
-func WriteQuote(root string, q store.Quote) (string, error) {
-	return WriteDoc(root, FromQuote(q), Name(q.Number, q.Slug))
+// WriteQuote renders a quote into dir and returns the path.
+func WriteQuote(dir string, q store.Quote) (string, error) {
+	return WriteDoc(dir, FromQuote(q), Name(q.Number, q.Slug))
 }
 
-// WriteDoc renders a document to Dir/name under root, replacing any older
-// copy in one rename.
-func WriteDoc(root string, doc Doc, name string) (string, error) {
+// WriteDoc renders a document to dir/name, replacing any older copy in one
+// rename.
+func WriteDoc(dir string, doc Doc, name string) (string, error) {
 	data, err := RenderDoc(doc, Options{})
 	if err != nil {
 		return "", err
 	}
-	dir := filepath.Join(root, Dir)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}

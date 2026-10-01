@@ -14,11 +14,10 @@ import (
 	"github.com/JustSteveKing/mavis/internal/record"
 )
 
-// TimeDir holds timesheets: one per engagement per month, a Markdown table of
+// Timesheets live one per engagement per month, a Markdown table of
 // entries. One file per entry would bury the folder; one per month across all
 // work would lose the engagement's backlinks. A sheet per engagement per
 // month is also exactly what gets invoiced.
-const TimeDir = "time"
 
 const monthLayout = "2006-01"
 
@@ -107,7 +106,7 @@ func parseSheet(d *record.Document, dayMinutes int, engagement, client, sheet st
 
 // TimeEntries lists every entry in every timesheet, oldest first.
 func (s *Store) TimeEntries() ([]TimeEntry, []Problem, error) {
-	dir := filepath.Join(s.root, TimeDir)
+	dir := filepath.Join(s.root, s.layout.Time)
 	files, err := os.ReadDir(dir)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil, nil
@@ -159,7 +158,7 @@ func (s *Store) ParseDay(v string) (string, error) {
 
 // SheetPath is where an engagement's timesheet for a month lives.
 func (s *Store) SheetPath(engagement, month string) string {
-	return filepath.Join(s.root, TimeDir, engagement+"-"+month+".md")
+	return filepath.Join(s.root, s.layout.Time, engagement+"-"+month+".md")
 }
 
 // AddTime appends an entry to the engagement's timesheet for the entry's
@@ -190,7 +189,7 @@ func (s *Store) AddTime(in NewTime) (TimeEntry, error) {
 		switch existing, err := s.findNote(sheet); {
 		case err != nil:
 			return err
-		case existing == filepath.Join(TimeDir, sheet+".md"):
+		case existing == filepath.Join(s.layout.Time, sheet+".md"):
 			if d, err = read(path); err != nil {
 				return err
 			}

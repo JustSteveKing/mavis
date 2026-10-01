@@ -139,7 +139,7 @@ func (s *Store) IssueInvoice(query string, o IssueOptions) (Invoice, error) {
 			return err
 		}
 		number := nextNumber(all, prefix(inv.Kind), date[:4])
-		path := filepath.Join(s.root, InvoicesDir, number+".md")
+		path := filepath.Join(s.root, s.layout.Invoices, number+".md")
 		if existing, err := s.findNote(number); err != nil {
 			return err
 		} else if existing != "" {

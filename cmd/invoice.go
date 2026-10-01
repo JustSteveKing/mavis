@@ -357,7 +357,7 @@ apart from being marked paid; mistakes are corrected with a credit note.`,
 			if err != nil {
 				return err
 			}
-			path, pdfErr := pdf.Write(s.Root(), inv)
+			path, pdfErr := pdf.Write(s.FilesDir(), inv)
 			// Setting your own Peppol ID is how you opt in to e-invoices;
 			// until then, issuing says nothing about them.
 			var xmlPath string
@@ -466,7 +466,7 @@ comes out the same however the config or the client has changed since.`,
 				if err != nil {
 					return err
 				}
-			} else if path, err = pdf.Write(s.Root(), inv); err != nil {
+			} else if path, err = pdf.Write(s.FilesDir(), inv); err != nil {
 				return err
 			}
 			if a.jsonOut {
@@ -547,7 +547,7 @@ func (a *app) writeUBL(s *store.Store, inv store.Invoice) (string, []ubl.Missing
 	if err != nil {
 		return "", nil, err
 	}
-	dir := filepath.Join(s.Root(), pdf.Dir)
+	dir := s.FilesDir()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", nil, err
 	}
@@ -780,7 +780,7 @@ the fixed compensation it allows. It is off unless you turn it on.`,
 			if err != nil {
 				return err
 			}
-			pdfPath := filepath.Join(s.Root(), pdf.Dir, pdf.Name(inv.Number, inv.Slug))
+			pdfPath := filepath.Join(s.FilesDir(), pdf.Name(inv.Number, inv.Slug))
 
 			if !sent {
 				if a.jsonOut {
