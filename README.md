@@ -38,16 +38,30 @@ somewhere to keep track of clients, you never have to meet either.
 
 ## Install
 
-From a release, download the archive for your platform from the releases
-page, unpack it and put `mavis` on your PATH. Linux and macOS, on amd64 and
-arm64.
+Linux and macOS, on amd64 and arm64:
 
-From source, with Go 1.27 or later:
+```bash
+curl -fsSL https://raw.githubusercontent.com/JustSteveKing/mavis/main/install.sh | sh
+```
+
+It downloads the archive for your platform, checks it against the
+release's `checksums.txt`, and installs to `~/.local/bin` when you have one
+and `/usr/local/bin` otherwise. `--bin-dir` chooses elsewhere, `--version
+v0.1.0` pins a release, and `--help` lists the rest. The repository is
+private for now, so until it is public, sign in with `gh auth login` first:
+the script uses the gh CLI when it is signed in, which is the only way to
+reach a private release.
+
+From source, with Go 1.27 or later, the same script builds when it is run
+inside a checkout:
 
 ```bash
 git clone https://github.com/JustSteveKing/mavis.git
-cd mavis && make install
+cd mavis && ./install.sh
 ```
+
+A source build reports a commit from `mavis --version` and a downloaded one
+reports its release, which is how you tell which you are running.
 
 To try it without touching anything of yours, `make sandbox` seeds a
 throwaway folder with sample clients, time, an invoice and a quote, using
