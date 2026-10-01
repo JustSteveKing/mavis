@@ -137,6 +137,18 @@ invoice (`FullyCredited`) no longer covers its month for `linesForMonth`
 and `InvoiceCovering`, which is what lets the month be re-billed. A credit
 note has no due date and cannot be paid.
 
+**Quotes mirror invoices** (`internal/store/quote.go`): the same lines
+table, `parseLines`, `totals`, `checkFrozen` and snapshot fields, their own
+`Q` series, and a `scope` that is simply the body above the table. Expired
+is derived from `valid_until`, like an invoice's balance. `DecideQuote`
+makes the engagement before it marks the quote, so a failed engagement
+leaves the quote open; it lets go of the lock in between and re-checks the
+status after.
+
+**`internal/pdf` renders a `Doc`, not an invoice.** `FromInvoice` and
+`FromQuote` map onto it, so the layout exists once. Units mavis writes (day,
+hour, month) are pluralised on the page; units typed by hand are not.
+
 **Invoice numbers are derived** from existing files (`nextNumber`), per year
 of the issue date, under the store lock. There is no counter. A gap would
 need a deleted issued invoice, and issued invoices cannot be discarded.

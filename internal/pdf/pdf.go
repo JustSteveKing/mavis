@@ -1,4 +1,4 @@
-// Package pdf renders an invoice as a PDF.
+// Package pdf renders invoices, credit notes and quotes as PDFs.
 //
 // An issued invoice is drawn entirely from its own snapshot (from_*, to_*,
 // vat_note), never from the config or the client's note, so a PDF
@@ -38,19 +38,64 @@ type Options struct {
 	Uncompressed bool
 }
 
-// Render draws an invoice. A draft is marked DRAFT and carries no number,
-// so a preview can never be mistaken for the real thing.
-func Render(inv store.Invoice, o Options) ([]byte, error) {
-	b := config.NewBuilder().
-		WithLeftMargin(18).
-		WithRightMargin(18).
-		WithTopMargin(18).
-		WithPageNumber(props.PageNumber{Pattern: "Page {current} of {total}", Place: props.RightBottom, Size: 8, Color: grey})
-	if !o.Uncompressed {
-		b = b.WithCompression(true)
-	}
-	m := maroto.New(b.Build())
+// Doc is what a page shows, whichever kind of document it is. Invoices,
+// credit notes and quotes each map onto it; the layout exists once.
+type Doc struct {
+	Title, Ref string
+	FromName   string
+	From       []string // address, VAT number, email
+	ToLabel    string   // BILL TO, or PREPARED FOR on a quote
+	To         []string // first line is the name
+	Dates      [][2]string
+	Scope      string // prose above the lines, for quotes
+	Lines      []store.Line
+	VATLines   []store.VATLine
+	Net, VAT   money.Pence
+	Total      money.Pence
+	Currency   string
+	Notes      []string
+}
 
+func from(i store.Issuer) []string {
+	out := []string{}
+	if i.Name == "" {
+		return out
+	}
+	out = append(out, i.Address...)
+	if i.VATNumber != "" {
+		out = append(out, "VAT "+i.VATNumber)
+	}
+	if i.Email != "" {
+		out = append(out, i.Email)
+	}
+	return out
+}
+
+func to(name, fallback string, address []string, vatNumber string) []string {
+	if name == "" {
+		name = fallback
+	}
+	out := append([]string{name}, address...)
+	if vatNumber != "" {
+		out = append(out, "VAT "+vatNumber)
+	}
+	return out
+}
+
+func dates(pairs ...[2]string) [][2]string {
+	var out [][2]string
+	for _, p := range pairs {
+		if p[1] != "" {
+			out = append(out, [2]string{p[0], p[1]})
+		}
+	}
+	return out
+}
+
+// FromInvoice lays out an invoice or a credit note. A draft is marked DRAFT
+// and carries no number, so a preview can never be mistaken for the real
+// thing.
+func FromInvoice(inv store.Invoice) Doc {
 	title, ref := "INVOICE", inv.Number
 	if inv.Kind == "credit" {
 		title, ref = "CREDIT NOTE", inv.Number+", crediting invoice "+inv.Credits
@@ -61,58 +106,92 @@ func Render(inv store.Invoice, o Options) ([]byte, error) {
 			ref += ", crediting invoice " + inv.Credits
 		}
 	}
-
-	// Who it is from, top right; what it is, top left.
-	from := []string{}
-	if inv.From.Name != "" {
-		from = append(from, inv.From.Address...)
-		if inv.From.VATNumber != "" {
-			from = append(from, "VAT "+inv.From.VATNumber)
-		}
-		if inv.From.Email != "" {
-			from = append(from, inv.From.Email)
-		}
+	d := Doc{
+		Title: title, Ref: ref,
+		FromName: inv.From.Name, From: from(inv.From),
+		ToLabel: "BILL TO", To: to(inv.ToName, inv.Client, inv.ToAddress, inv.ToVATNumber),
+		Dates: dates(
+			[2]string{"Invoice date", long(inv.Issued)}, [2]string{"Tax point", long(inv.TaxPoint)},
+			[2]string{"Due", long(inv.Due)}, [2]string{"Period", period(inv.Period)},
+		),
+		Lines: inv.Lines, VATLines: inv.VATLines, Net: inv.Net, VAT: inv.VAT, Total: inv.Total, Currency: inv.Currency,
 	}
+	if inv.VATNote != "" {
+		d.Notes = append(d.Notes, inv.VATNote)
+	}
+	if inv.Kind == "credit" {
+		d.Notes = append(d.Notes, "This credit note reduces the amount owed on invoice "+inv.Credits+".")
+	} else if inv.Due != "" {
+		d.Notes = append(d.Notes, "Payment is due by "+long(inv.Due)+".")
+	}
+	return d
+}
+
+// FromQuote lays out a quote: its scope above the lines, and how long it
+// stands below them.
+func FromQuote(q store.Quote) Doc {
+	ref := q.Number + ": " + q.Title
+	title := "QUOTE"
+	if q.Status == "draft" {
+		title, ref = "DRAFT QUOTE", q.Title+", not yet sent"
+	}
+	d := Doc{
+		Title: title, Ref: ref,
+		FromName: q.From.Name, From: from(q.From),
+		ToLabel: "PREPARED FOR", To: to(q.ToName, q.Client, q.ToAddress, q.ToVATNumber),
+		Dates: dates([2]string{"Date", long(q.Sent)}, [2]string{"Valid until", long(q.ValidUntil)}),
+		Scope: q.Scope,
+		Lines: q.Lines, VATLines: q.VATLines, Net: q.Net, VAT: q.VAT, Total: q.Total, Currency: q.Currency,
+	}
+	if q.VATNote != "" {
+		d.Notes = append(d.Notes, q.VATNote)
+	}
+	if q.ValidUntil != "" {
+		d.Notes = append(d.Notes, "This quote is valid until "+long(q.ValidUntil)+".")
+	}
+	return d
+}
+
+// Render draws an invoice or credit note.
+func Render(inv store.Invoice, o Options) ([]byte, error) { return RenderDoc(FromInvoice(inv), o) }
+
+// RenderDoc draws any document.
+func RenderDoc(doc Doc, o Options) ([]byte, error) {
+	b := config.NewBuilder().
+		WithLeftMargin(18).
+		WithRightMargin(18).
+		WithTopMargin(18).
+		WithPageNumber(props.PageNumber{Pattern: "Page {current} of {total}", Place: props.RightBottom, Size: 8, Color: grey})
+	if !o.Uncompressed {
+		b = b.WithCompression(true)
+	}
+	m := maroto.New(b.Build())
+
+	// What it is, top left; who it is from, top right.
 	m.AddRows(row.New(12).Add(
-		text.NewCol(6, title, props.Text{Size: 20, Style: fontstyle.Bold}),
-		text.NewCol(6, inv.From.Name, props.Text{Size: 11, Style: fontstyle.Bold, Align: align.Right}),
+		text.NewCol(6, doc.Title, props.Text{Size: 20, Style: fontstyle.Bold}),
+		text.NewCol(6, doc.FromName, props.Text{Size: 11, Style: fontstyle.Bold, Align: align.Right}),
 	))
 	m.AddRows(row.New(5).Add(
-		text.NewCol(6, ref, props.Text{Size: 10, Color: grey}),
+		text.NewCol(6, doc.Ref, props.Text{Size: 10, Color: grey}),
 		col.New(6),
 	))
-	m.AddRows(linesCol(from)...)
+	m.AddRows(linesCol(doc.From)...)
 	m.AddRows(row.New(8))
 
-	// Billed to, and the dates.
-	to := []string{inv.ToName}
-	if inv.ToName == "" {
-		to = []string{inv.Client}
-	}
-	to = append(to, inv.ToAddress...)
-	if inv.ToVATNumber != "" {
-		to = append(to, "VAT "+inv.ToVATNumber)
-	}
-	dates := [][2]string{}
-	for _, d := range []struct{ label, value string }{
-		{"Invoice date", inv.Issued}, {"Tax point", inv.TaxPoint}, {"Due", inv.Due}, {"Period", period(inv.Period)},
-	} {
-		if d.value != "" {
-			dates = append(dates, [2]string{d.label, long(d.value)})
-		}
-	}
+	// Who it is for, and the dates.
 	m.AddRows(row.New(5).Add(
-		text.NewCol(6, "BILL TO", props.Text{Size: 8, Style: fontstyle.Bold, Color: grey}),
+		text.NewCol(6, doc.ToLabel, props.Text{Size: 8, Style: fontstyle.Bold, Color: grey}),
 		col.New(6),
 	))
-	n := max(len(to), len(dates))
+	n := max(len(doc.To), len(doc.Dates))
 	for i := 0; i < n; i++ {
 		left, label, value := "", "", ""
-		if i < len(to) {
-			left = to[i]
+		if i < len(doc.To) {
+			left = doc.To[i]
 		}
-		if i < len(dates) {
-			label, value = dates[i][0], dates[i][1]
+		if i < len(doc.Dates) {
+			label, value = doc.Dates[i][0], doc.Dates[i][1]
 		}
 		style := fontstyle.Normal
 		if i == 0 {
@@ -125,6 +204,18 @@ func Render(inv store.Invoice, o Options) ([]byte, error) {
 		))
 	}
 	m.AddRows(row.New(10))
+
+	// Scope, paragraph by paragraph.
+	if doc.Scope != "" {
+		for _, para := range strings.Split(doc.Scope, "\n\n") {
+			para = strings.Join(strings.Fields(para), " ")
+			if para != "" {
+				m.AddRows(text.NewAutoRow(para, props.Text{Size: 10}))
+				m.AddRows(row.New(3))
+			}
+		}
+		m.AddRows(row.New(5))
+	}
 
 	// The lines.
 	head := props.Text{Size: 8, Style: fontstyle.Bold, Color: grey}
@@ -141,10 +232,10 @@ func Render(inv store.Invoice, o Options) ([]byte, error) {
 	cell := props.Text{Size: 9, Top: 1.5}
 	cellR := cell
 	cellR.Align = align.Right
-	for _, l := range inv.Lines {
+	for _, l := range doc.Lines {
 		m.AddAutoRow(
 			text.NewCol(5, l.Description, cell),
-			text.NewCol(2, strings.TrimSpace(l.Qty+" "+l.Unit), cellR),
+			text.NewCol(2, quantity(l.Qty, l.Unit), cellR),
 			text.NewCol(2, l.Price.Display(), cellR),
 			text.NewCol(1, vat(l.VAT), cellR),
 			text.NewCol(2, l.Amount.Display(), cellR),
@@ -153,7 +244,7 @@ func Render(inv store.Invoice, o Options) ([]byte, error) {
 	m.AddRows(row.New(2), rule())
 
 	// Totals, right-aligned under Amount.
-	sym := symbol(inv.Currency)
+	sym := symbol(doc.Currency)
 	total := func(label, value string, bold bool) core.Row {
 		st := fontstyle.Normal
 		if bold {
@@ -165,44 +256,46 @@ func Render(inv store.Invoice, o Options) ([]byte, error) {
 			text.NewCol(2, value, props.Text{Size: 10, Style: st, Align: align.Right, Top: 1}),
 		)
 	}
-	m.AddRows(total("Net", sym+inv.Net.Display(), false))
-	for _, v := range inv.VATLines {
-		if v.Rate > 0 || len(inv.VATLines) > 1 {
+	m.AddRows(total("Net", sym+doc.Net.Display(), false))
+	for _, v := range doc.VATLines {
+		if v.Rate > 0 || len(doc.VATLines) > 1 {
 			m.AddRows(total("VAT at "+vat(v.Rate), sym+v.VAT.Display(), false))
 		}
 	}
-	if inv.VAT == 0 && len(inv.VATLines) <= 1 {
+	if doc.VAT == 0 && len(doc.VATLines) <= 1 {
 		m.AddRows(total("VAT", sym+money.Pence(0).Display(), false))
 	}
-	m.AddRows(total("Total "+inv.Currency, sym+inv.Total.Display(), true))
+	m.AddRows(total("Total "+doc.Currency, sym+doc.Total.Display(), true))
 
 	// The small print.
-	var notes []string
-	if inv.VATNote != "" {
-		notes = append(notes, inv.VATNote)
-	}
-	if inv.Kind == "credit" {
-		notes = append(notes, "This credit note reduces the amount owed on invoice "+inv.Credits+".")
-	} else if inv.Due != "" {
-		notes = append(notes, "Payment is due by "+long(inv.Due)+".")
-	}
-	if len(notes) > 0 {
+	if len(doc.Notes) > 0 {
 		m.AddRows(row.New(12))
-		for _, n := range notes {
+		for _, n := range doc.Notes {
 			m.AddRows(text.NewAutoRow(n, props.Text{Size: 9, Color: grey}))
 		}
 	}
 
-	doc, err := m.Generate()
+	out, err := m.Generate()
 	if err != nil {
 		return nil, err
 	}
-	return doc.GetBytes(), nil
+	return out.GetBytes(), nil
 }
 
 // Write renders an invoice into Dir under root and returns the path.
 func Write(root string, inv store.Invoice) (string, error) {
-	data, err := Render(inv, Options{})
+	return WriteDoc(root, FromInvoice(inv), Name(inv.Number, inv.Slug))
+}
+
+// WriteQuote renders a quote into Dir under root and returns the path.
+func WriteQuote(root string, q store.Quote) (string, error) {
+	return WriteDoc(root, FromQuote(q), Name(q.Number, q.Slug))
+}
+
+// WriteDoc renders a document to Dir/name under root, replacing any older
+// copy in one rename.
+func WriteDoc(root string, doc Doc, name string) (string, error) {
+	data, err := RenderDoc(doc, Options{})
 	if err != nil {
 		return "", err
 	}
@@ -210,7 +303,7 @@ func Write(root string, inv store.Invoice) (string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
-	path := filepath.Join(dir, Name(inv))
+	path := filepath.Join(dir, name)
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, data, 0o644); err != nil {
 		return "", err
@@ -250,6 +343,9 @@ func symbol(currency string) string {
 }
 
 func long(date string) string {
+	if date == "" {
+		return ""
+	}
 	t, err := time.Parse("2006-01-02", date)
 	if err != nil {
 		return date
@@ -268,10 +364,27 @@ func period(month string) string {
 	return t.Format("January 2006")
 }
 
-// Name is the file name an invoice's PDF is written under.
-func Name(inv store.Invoice) string {
-	if inv.Number != "" {
-		return inv.Number + ".pdf"
+// Name is the file name a document's PDF is written under: its number once
+// it has one, its slug before.
+func Name(number, slug string) string {
+	if number != "" {
+		return number + ".pdf"
 	}
-	return inv.Slug + ".pdf"
+	return slug + ".pdf"
+}
+
+// quantity joins a quantity and its unit for reading: "10 days", "1 day",
+// "2.75 hours". Only the units mavis writes itself are pluralised; anything
+// typed by hand is left as typed.
+func quantity(qty, unit string) string {
+	if unit == "" {
+		return qty
+	}
+	if qty != "1" {
+		switch unit {
+		case "day", "hour", "month":
+			unit += "s"
+		}
+	}
+	return qty + " " + unit
 }

@@ -92,6 +92,23 @@ type Invoicing struct {
 	Overdue     []InvoiceTotal `json:"overdue"`     // unpaid now and past due
 }
 
+// QuoteTotal sums quotes' net value in one currency: the work offered,
+// before VAT.
+type QuoteTotal struct {
+	Currency string      `json:"currency"`
+	Count    int         `json:"count"`
+	Net      money.Pence `json:"net"`
+}
+
+// Quoting is the pipeline. Absent until a quote has been sent.
+type Quoting struct {
+	Sent     []QuoteTotal `json:"sent"`     // sent in the period
+	Accepted []QuoteTotal `json:"accepted"` // accepted in the period
+	Declined []QuoteTotal `json:"declined"` // declined in the period
+	Waiting  []QuoteTotal `json:"waiting"`  // sent, unanswered and still valid now
+	Expired  []QuoteTotal `json:"expired"`  // sent, unanswered and past valid_until now
+}
+
 type Stats struct {
 	Period      Period           `json:"period"`
 	Minutes     int              `json:"minutes"`
@@ -99,6 +116,7 @@ type Stats struct {
 	Totals      []Total          `json:"totals"`
 	Fixed       []FixedStat      `json:"fixed"`
 	Invoicing   *Invoicing       `json:"invoicing,omitempty"`
+	Quoting     *Quoting         `json:"quoting,omitempty"`
 }
 
 // Stats works out time and its value for a period.
@@ -236,6 +254,12 @@ func (s *Store) Stats(p Period) (Stats, []Problem, error) {
 	}
 	problems = append(problems, pr...)
 	out.Invoicing = inv
+	quoting, pr, err := s.quoting(p)
+	if err != nil {
+		return out, nil, err
+	}
+	problems = append(problems, pr...)
+	out.Quoting = quoting
 
 	for _, cur := range sortedKeys(totals) {
 		t := totals[cur]
@@ -338,4 +362,58 @@ func (s *Store) invoicing(p Period) (*Invoicing, []Problem, error) {
 		return out
 	}
 	return &Invoicing{Invoiced: list(invoiced), Credited: list(credited), Paid: list(paid), Outstanding: list(outstanding), Overdue: list(overdue)}, problems, nil
+}
+
+func (s *Store) quoting(p Period) (*Quoting, []Problem, error) {
+	quotes, problems, err := s.Quotes()
+	if err != nil {
+		return nil, nil, err
+	}
+	today := s.today()
+	buckets := map[string]map[string]*QuoteTotal{}
+	add := func(bucket string, q Quote) {
+		m := buckets[bucket]
+		if m == nil {
+			m = map[string]*QuoteTotal{}
+			buckets[bucket] = m
+		}
+		t := m[q.Currency]
+		if t == nil {
+			t = &QuoteTotal{Currency: q.Currency}
+			m[q.Currency] = t
+		}
+		t.Count++
+		t.Net += q.Net
+	}
+	any := false
+	for _, q := range quotes {
+		if q.Status == "draft" {
+			continue
+		}
+		any = true
+		if p.contains(q.Sent) {
+			add("sent", q)
+		}
+		if p.contains(q.Decided) {
+			add(q.Status, q)
+		}
+		if q.Status == "sent" {
+			if q.Expired(today) {
+				add("expired", q)
+			} else {
+				add("waiting", q)
+			}
+		}
+	}
+	if !any {
+		return nil, problems, nil
+	}
+	list := func(bucket string) []QuoteTotal {
+		out := []QuoteTotal{}
+		for _, k := range sortedKeys(buckets[bucket]) {
+			out = append(out, *buckets[bucket][k])
+		}
+		return out
+	}
+	return &Quoting{Sent: list("sent"), Accepted: list("accepted"), Declined: list("declined"), Waiting: list("waiting"), Expired: list("expired")}, problems, nil
 }

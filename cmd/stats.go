@@ -55,7 +55,7 @@ Amounts in different currencies are totalled separately.`,
 			}
 
 			a.printf("%s\n\n", label)
-			if len(st.Engagements) == 0 && len(st.Fixed) == 0 && st.Invoicing == nil {
+			if len(st.Engagements) == 0 && len(st.Fixed) == 0 && st.Invoicing == nil && st.Quoting == nil {
 				a.printf("No time logged.\n")
 				return nil
 			}
@@ -122,6 +122,29 @@ Amounts in different currencies are totalled separately.`,
 					add("of which overdue", inv.Overdue, false)
 				}
 				table(a.out, "  ", map[int]bool{1: true, 2: true, 3: true, 4: true}, rows)
+			}
+
+			if q := st.Quoting; q != nil {
+				a.printf("\nQuotes, net of VAT\n")
+				rows := [][]string{}
+				add := func(label string, totals []store.QuoteTotal) {
+					if len(totals) == 0 {
+						rows = append(rows, []string{label, "none", ""})
+						return
+					}
+					for _, t := range totals {
+						rows = append(rows, []string{label, fmt.Sprintf("%d", t.Count), t.Net.Display() + " " + t.Currency})
+						label = ""
+					}
+				}
+				add("Sent", q.Sent)
+				add("Accepted", q.Accepted)
+				add("Declined", q.Declined)
+				add("Waiting now", q.Waiting)
+				if len(q.Expired) > 0 {
+					add("Expired, unanswered", q.Expired)
+				}
+				table(a.out, "  ", map[int]bool{1: true, 2: true}, rows)
 			}
 			return nil
 		},

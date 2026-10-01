@@ -39,6 +39,9 @@ type Engagement struct {
 // client acme and name reporting make the file acme-reporting.md.
 type NewEngagement struct {
 	Client, Name, Title, Status, Basis, Rate, Budget, Start, Project string
+
+	// Quote is the number of the quote this work was accepted from.
+	Quote string
 }
 
 func engagementFrom(path string, d *record.Document) Engagement {
@@ -168,6 +171,9 @@ func (s *Store) AddEngagement(in NewEngagement) (Engagement, error) {
 		}
 		if in.Project != "" {
 			d.Set("project", link(linkTarget(in.Project)))
+		}
+		if in.Quote != "" {
+			d.Set("quote", link(in.Quote))
 		}
 
 		if err := write(path, d); err != nil {

@@ -378,19 +378,11 @@ func (s *Store) AddInvoice(in NewInvoice) (Invoice, []Skipped, error) {
 			}
 		}
 		for _, m := range in.Lines {
-			qty := m.Qty
-			if qty == "" {
-				qty = "1"
-			}
-			q, err := money.Parse(qty)
-			if err != nil || q <= 0 {
-				return fmt.Errorf("line %q: quantity %q is not a number above zero", m.Description, qty)
-			}
-			price, err := money.Parse(m.Price)
+			l, err := manualLine(m, vat)
 			if err != nil {
-				return fmt.Errorf("line %q: %w", m.Description, err)
+				return err
 			}
-			lines = append(lines, Line{Description: m.Description, Qty: trimQty(q), Unit: m.Unit, Price: price, VAT: vat, Amount: price.MulDiv(int64(q), 100)})
+			lines = append(lines, l)
 		}
 		if len(lines) == 0 {
 			return fmt.Errorf("nothing to bill %s for %s", client.Slug, monthLabel)

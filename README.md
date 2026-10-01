@@ -32,7 +32,8 @@ and knew exactly who still owed you.
 
 mavis is early. What exists today is the client side (clients, engagements,
 the log of calls and notes, follow-ups, `today`), time tracking, stats, and
-invoices from draft to PDF to paid, with credit notes to correct them. Time and invoicing are both optional: if you only want
+quotes, and invoices from draft to PDF to paid, with credit notes to
+correct them. Time and invoicing are both optional: if you only want
 somewhere to keep track of clients, you never have to meet either.
 
 ## Install
@@ -54,7 +55,7 @@ cd mavis && go build -ldflags "-X main.version=$(git describe --tags --always)" 
 mavis init ~/business
 ```
 
-That creates `clients/`, `engagements/`, `log/`, `time/` and `invoices/` in `~/business` and
+That creates `clients/`, `engagements/`, `log/`, `time/`, `invoices/` and `quotes/` in `~/business` and
 remembers it as your records directory. Run it inside an Obsidian vault and
 the records become notes in it.
 
@@ -180,6 +181,36 @@ Fix a mistake by editing the table, in Obsidian or with
 `mavis time edit reporting`. A row mavis cannot read is reported with its line
 number and left out of the totals, rather than hiding the rest of the sheet.
 New rows go at the end of the table, so a note you write under it stays put.
+
+## Quotes
+
+```bash
+mavis quote new globex --title "Reporting rebuild" \
+  --scope "A rebuilt reporting module, with CSV and PDF exports." \
+  --line "Discovery and design=3 x 650 day" --line "Build=10 x 650 day"
+mavis quote send globex
+mavis quote accept Q-2026-001 --engagement reporting
+```
+
+A quote has a title, a scope and lines. The scope is prose, what the client
+is getting, and it is printed above the lines; write it with `--scope` or in
+the draft with `mavis quote edit`. Lines and VAT work as they do on invoices.
+
+`send` numbers the quote (`Q-2026-001`), freezes it, and writes its PDF
+beside your invoices. It does not email anything. The client's address is
+not needed, since a prospect may not have given you one. A quote stands for
+30 days unless `--valid` said otherwise, and one left unanswered after that
+shows as expired; nothing has to be rewritten for that to happen.
+
+`accept` records the answer, and with `--engagement` starts the work: an
+active engagement titled after the quote and linked to it. It is fixed price
+with the quote's net total as its budget, unless you give `--basis day --rate
+650`, in which case its time invoices like any other day-rate work. If the
+engagement cannot be made, because the name is taken say, the quote stays
+open so you can try again. `decline` records a no.
+
+Quotes waiting on an answer are listed in `today`, oldest first, and `stats`
+counts quotes sent, accepted, declined and still waiting.
 
 ## Invoices
 
@@ -342,6 +373,7 @@ engagements/acme-reporting.md
 log/2026-10-01-acme-call.md
 time/acme-reporting-2026-10.md
 invoices/draft-acme-2026-10.md
+quotes/Q-2026-001.md
 ```
 
 A log entry looks like this:

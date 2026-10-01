@@ -386,3 +386,45 @@ func TestCreditNoteFromTheCLI(t *testing.T) {
 		t.Fatalf("show:\n%s", out)
 	}
 }
+
+func TestQuoteToEngagementToInvoice(t *testing.T) {
+	dir := setup(t)
+	cfg := os.Getenv("XDG_CONFIG_HOME") + "/mavis/config.yaml"
+	data, _ := os.ReadFile(cfg)
+	os.WriteFile(cfg, append(data, []byte("business:\n  name: Steve Ltd\n  address: [1 My Street]\n  vat_number: GB999999973\n")...), 0o644)
+	mustRun(t, "client", "add", "globex", "--name", "Globex Corporation", "--status", "prospect")
+
+	out := mustRun(t, "quote", "new", "globex", "--title", "Reporting rebuild", "--scope", "A rebuilt reporting module.", "--line", "Build=10 x 650 day")
+	if !strings.Contains(out, "Drafted draft-globex: Reporting rebuild") || !strings.Contains(out, "6,500.00") {
+		t.Fatalf("new:\n%s", out)
+	}
+	out = mustRun(t, "quote", "send", "globex", "--date", "2026-10-01")
+	if !strings.HasPrefix(out, "Sent Q-2026-001 to Globex Corporation: 6,500.00 GBP net, valid until 2026-10-31\n") {
+		t.Fatalf("send: %q", out)
+	}
+	if _, err := os.Stat(dir + "/.invoices/Q-2026-001.pdf"); err != nil {
+		t.Fatal(err)
+	}
+	if out := mustRun(t, "quote", "show", "Q-2026-001"); !strings.Contains(out, "A rebuilt reporting module.") {
+		t.Fatalf("show:\n%s", out)
+	}
+	if out := mustRun(t, "today"); !strings.Contains(out, "Quotes waiting") || !strings.Contains(out, "Q-2026-001") {
+		t.Fatalf("today:\n%s", out)
+	}
+
+	out = mustRun(t, "quote", "accept", "Q-2026-001", "--engagement", "reporting", "--basis", "day", "--rate", "650", "--date", "2026-10-03")
+	if !strings.Contains(out, "Q-2026-001 accepted on 2026-10-03") || !strings.Contains(out, "Started Reporting rebuild (globex-reporting), day @ 650.00") {
+		t.Fatalf("accept:\n%s", out)
+	}
+	mustRun(t, "client", "active", "globex")
+	mustRun(t, "time", "reporting", "2d", "--date", "2026-10-06")
+	if out := mustRun(t, "invoice", "new", "globex", "--month", "2026-10"); !strings.Contains(out, "Reporting rebuild, October 2026") {
+		t.Fatalf("the accepted quote's work should invoice:\n%s", out)
+	}
+	if out := mustRun(t, "stats", "--month", "2026-10"); !strings.Contains(out, "Quotes, net of VAT") || !regexp.MustCompile(`Accepted\s+1\s+6,500.00 GBP`).MatchString(out) {
+		t.Fatalf("stats:\n%s", out)
+	}
+	if _, err := run(t, "quote", "decline", "Q-2026-001", "--date", "2026-10-04"); err == nil {
+		t.Fatal("a quote cannot be answered twice")
+	}
+}

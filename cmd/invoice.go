@@ -234,17 +234,21 @@ func newInvoiceShowCommand(a *app) *cobra.Command {
 
 // invoiceBody prints the lines and the totals beneath them.
 func (a *app) invoiceBody(inv store.Invoice) {
+	a.linesBody(inv.Lines, inv.VATLines, inv.Net, inv.Total, inv.Currency)
+}
+
+func (a *app) linesBody(lines []store.Line, vatLines []store.VATLine, net, total money.Pence, currency string) {
 	rows := [][]string{{"DESCRIPTION", "QTY", "UNIT", "PRICE", "VAT", "AMOUNT"}}
-	for _, l := range inv.Lines {
+	for _, l := range lines {
 		rows = append(rows, []string{l.Description, l.Qty, l.Unit, l.Price.Display(), vatLabel(l.VAT), l.Amount.Display()})
 	}
-	rows = append(rows, []string{"", "", "", "", "Net", inv.Net.Display()})
-	for _, v := range inv.VATLines {
-		if len(inv.VATLines) > 1 || v.Rate > 0 {
+	rows = append(rows, []string{"", "", "", "", "Net", net.Display()})
+	for _, v := range vatLines {
+		if len(vatLines) > 1 || v.Rate > 0 {
 			rows = append(rows, []string{"", "", "", "", "VAT " + vatLabel(v.Rate), v.VAT.Display()})
 		}
 	}
-	rows = append(rows, []string{"", "", "", "", "Total", inv.Total.Display() + " " + inv.Currency})
+	rows = append(rows, []string{"", "", "", "", "Total", total.Display() + " " + currency})
 	table(a.out, "  ", map[int]bool{1: true, 3: true, 4: true, 5: true}, rows)
 }
 

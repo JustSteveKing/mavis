@@ -66,6 +66,19 @@ mavis suggests moves; it never makes them. Cold clients are never shown.`,
 				}
 				w.Flush()
 			}
+			if len(t.Quotes) > 0 {
+				w := section("Quotes waiting")
+				for _, q := range t.Quotes {
+					when := "sent " + q.Sent + " (" + ago(q.Sent, t.Date) + ")"
+					if q.Expired(t.Date) {
+						when += " · expired " + q.ValidUntil
+					} else if q.ValidUntil != "" {
+						when += " · valid until " + q.ValidUntil
+					}
+					fmt.Fprintf(w, "  %s\t%s · %s · %s %s · %s\n", q.Number, q.Client, q.Title, q.Net.Display(), q.Currency, when)
+				}
+				w.Flush()
+			}
 			if len(t.ThisWeek) > 0 {
 				w := section("Due this week")
 				for _, f := range t.ThisWeek {
@@ -118,7 +131,10 @@ func ago(date, today string) string {
 	if !ok {
 		return ""
 	}
-	if n == 1 {
+	switch n {
+	case 0:
+		return "today"
+	case 1:
 		return "1 day ago"
 	}
 	return fmt.Sprintf("%d days ago", n)

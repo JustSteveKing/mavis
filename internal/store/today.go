@@ -3,6 +3,7 @@ package store
 import (
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -29,6 +30,7 @@ type Today struct {
 	Date        string       `json:"date"`
 	Overdue     []FollowUp   `json:"overdue"`
 	Unpaid      []Invoice    `json:"overdue_invoices"`
+	Quotes      []Quote      `json:"quotes_waiting"`
 	ThisWeek    []FollowUp   `json:"this_week"`
 	Engagements []Engagement `json:"active_engagements"`
 	Moves       []Nudge      `json:"moves"`
@@ -41,7 +43,7 @@ func (s *Store) Today(q Quiet) (Today, []Problem, error) {
 	now := s.Now()
 	today := now.Format(dateLayout)
 	weekEnd := now.AddDate(0, 0, 6).Format(dateLayout)
-	t := Today{Date: today, Overdue: []FollowUp{}, Unpaid: []Invoice{}, ThisWeek: []FollowUp{}, Engagements: []Engagement{}, Moves: []Nudge{}, KeepInTouch: []Nudge{}}
+	t := Today{Date: today, Overdue: []FollowUp{}, Unpaid: []Invoice{}, Quotes: []Quote{}, ThisWeek: []FollowUp{}, Engagements: []Engagement{}, Moves: []Nudge{}, KeepInTouch: []Nudge{}}
 
 	clients, problems, err := s.Clients()
 	if err != nil {
@@ -68,6 +70,18 @@ func (s *Store) Today(q Quiet) (Today, []Problem, error) {
 			t.Unpaid = append(t.Unpaid, inv)
 		}
 	}
+
+	quotes, p, err := s.Quotes()
+	if err != nil {
+		return t, nil, err
+	}
+	problems = append(problems, p...)
+	for _, q := range quotes {
+		if q.Status == "sent" {
+			t.Quotes = append(t.Quotes, q)
+		}
+	}
+	slices.SortStableFunc(t.Quotes, func(a, b Quote) int { return strings.Compare(a.Sent, b.Sent) })
 
 	lastContact := map[string]string{}
 	for _, l := range logs {

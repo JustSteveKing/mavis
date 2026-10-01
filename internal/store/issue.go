@@ -39,7 +39,7 @@ func (e *MissingError) Error() string {
 	return fmt.Sprintf("%s cannot be issued yet; missing:\n  %s", e.Invoice, strings.Join(e.Missing, "\n  "))
 }
 
-var numberPattern = regexp.MustCompile(`^(INV|CN)-(\d{4})-(\d{3,})$`)
+var numberPattern = regexp.MustCompile(`^(INV|CN|Q)-(\d{4})-(\d{3,})$`)
 
 // prefix is the number series for a kind: invoices and credit notes each
 // run their own.

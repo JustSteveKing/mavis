@@ -32,7 +32,7 @@ func TestIssuedInvoiceCarriesWhatAVATInvoiceMust(t *testing.T) {
 	}
 	for _, want := range []string{
 		"INV-2026-001", "Steve Ltd", "VAT GB999999973", "Acme Ltd", "1 High Street",
-		"31 October 2026", "Reporting module, October 2026", "5 day", "650.00",
+		"31 October 2026", "Reporting module, October 2026", "5 days", "650.00",
 		"VAT at 20%", "3,900.00", "Total GBP", "Payment is due by 30 November 2026.",
 		"\xa3", // the pound sign, in the core fonts' Windows-1252
 	} {
@@ -72,5 +72,36 @@ func TestCreditNoteSaysWhatItCredits(t *testing.T) {
 	}
 	if bytes.Contains(data, []byte("Payment is due")) {
 		t.Error("a credit note asks for no payment")
+	}
+}
+
+func TestQuoteShowsScopeAndValidity(t *testing.T) {
+	q := store.Quote{
+		Number: "Q-2026-001", Status: "sent", Client: "globex", Title: "Reporting rebuild", Currency: "GBP",
+		Sent: "2026-10-01", ValidUntil: "2026-10-31", ToName: "Globex Corporation",
+		From:  store.Issuer{Name: "Steve Ltd"},
+		Scope: "A rebuilt reporting module.\n\nExports to CSV and PDF.",
+		Lines: []store.Line{{Description: "Build", Qty: "10", Unit: "day", Price: 65000, VAT: 2000, Amount: 650000}},
+		Net:   650000, VAT: 130000, Total: 780000,
+	}
+	data, err := RenderDoc(FromQuote(q), Options{Uncompressed: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"QUOTE", "Q-2026-001: Reporting rebuild", "PREPARED FOR", "Globex Corporation", "Valid until", "A rebuilt reporting module.", "Exports to CSV and PDF.", "This quote is valid until 31 October 2026."} {
+		if !bytes.Contains(data, []byte(want)) {
+			t.Errorf("missing %q", want)
+		}
+	}
+	if bytes.Contains(data, []byte("Payment is due")) || bytes.Contains(data, []byte("BILL TO")) {
+		t.Error("a quote is not a bill")
+	}
+}
+
+func TestQuantityReadsAsEnglish(t *testing.T) {
+	for _, c := range [][3]string{{"1", "day", "1 day"}, {"10", "day", "10 days"}, {"2.75", "hour", "2.75 hours"}, {"3", "seats", "3 seats"}, {"2", "licence", "2 licence"}, {"4", "", "4"}} {
+		if got := quantity(c[0], c[1]); got != c[2] {
+			t.Errorf("quantity(%q, %q) = %q, want %q", c[0], c[1], got, c[2])
+		}
 	}
 }

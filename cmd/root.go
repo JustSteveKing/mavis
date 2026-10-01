@@ -101,6 +101,7 @@ Every record is a file you can open, grep, diff and edit by hand.`,
 		newTimeCommand(a),
 		newStatsCommand(a),
 		newInvoiceCommand(a),
+		newQuoteCommand(a),
 	)
 	return root
 }
