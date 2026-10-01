@@ -29,6 +29,7 @@ func newInvoiceCommand(a *app) *cobra.Command {
 		newInvoiceIssueCommand(a),
 		newInvoicePDFCommand(a),
 		newInvoiceUBLCommand(a),
+		newInvoiceRetainersCommand(a),
 		newInvoiceCreditCommand(a),
 		newInvoicePaidCommand(a, true),
 		newInvoicePaidCommand(a, false),
@@ -632,4 +633,77 @@ issued before they were set, the current config and client are used.`,
 			return nil
 		},
 	}
+}
+
+func newInvoiceRetainersCommand(a *app) *cobra.Command {
+	var draft bool
+	cmd := &cobra.Command{
+		Use:   "retainers",
+		Short: "List retainer months to bill, and draft them",
+		Long: `Retainers are billed in arrears: a month is due once it is over, so
+November's appears from 1 December. Every finished month since the
+retainer started is listed until something bills it, so a forgotten month
+comes back rather than slipping by.
+
+With --draft, each due month gets its own draft, draft-<engagement>-<month>,
+holding the retainer and nothing else. Check them, then issue each one.
+
+Paused and proposed retainers are never due, and a month already on an
+invoice is skipped unless that invoice was credited in full.`,
+		Example: `  mavis invoice retainers
+  mavis invoice retainers --draft`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			s, err := a.openStore()
+			if err != nil {
+				return err
+			}
+			due, err := s.RetainersDue()
+			if err != nil {
+				return err
+			}
+			if !draft {
+				if a.jsonOut {
+					if due == nil {
+						due = []store.RetainerDue{}
+					}
+					return a.emitJSON(due)
+				}
+				if len(due) == 0 {
+					a.printf("No retainer months to bill.\n")
+					return nil
+				}
+				rows := [][]string{{"CLIENT", "RETAINER", "MONTH", "RATE"}}
+				for _, r := range due {
+					rows = append(rows, []string{r.Client, r.Title, monthName(r.Month), r.Rate})
+				}
+				table(a.out, "", map[int]bool{3: true}, rows)
+				a.printf("\nDraft them with: mavis invoice retainers --draft\n")
+				return nil
+			}
+
+			drafted := []store.Invoice{}
+			for _, r := range due {
+				inv, err := s.DraftRetainer(r.Engagement, r.Month)
+				if err != nil {
+					return fmt.Errorf("drafted %d, then %s for %s failed: %w", len(drafted), r.Engagement, r.Month, err)
+				}
+				drafted = append(drafted, inv)
+			}
+			if a.jsonOut {
+				return a.emitJSON(drafted)
+			}
+			if len(drafted) == 0 {
+				a.printf("No retainer months to bill.\n")
+				return nil
+			}
+			for _, inv := range drafted {
+				a.printf("Drafted %s: %s %s\n", inv.Slug, inv.Total.Display(), inv.Currency)
+			}
+			a.printf("\nCheck them, then: mavis invoice issue <draft>\n")
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&draft, "draft", false, "draft an invoice for each month due")
+	return cmd
 }

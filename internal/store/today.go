@@ -27,14 +27,15 @@ type Nudge struct {
 }
 
 type Today struct {
-	Date        string       `json:"date"`
-	Overdue     []FollowUp   `json:"overdue"`
-	Unpaid      []Invoice    `json:"overdue_invoices"`
-	Quotes      []Quote      `json:"quotes_waiting"`
-	ThisWeek    []FollowUp   `json:"this_week"`
-	Engagements []Engagement `json:"active_engagements"`
-	Moves       []Nudge      `json:"moves"`
-	KeepInTouch []Nudge      `json:"keep_in_touch"`
+	Date        string        `json:"date"`
+	Overdue     []FollowUp    `json:"overdue"`
+	Unpaid      []Invoice     `json:"overdue_invoices"`
+	Quotes      []Quote       `json:"quotes_waiting"`
+	Retainers   []RetainerDue `json:"retainers_to_bill"`
+	ThisWeek    []FollowUp    `json:"this_week"`
+	Engagements []Engagement  `json:"active_engagements"`
+	Moves       []Nudge       `json:"moves"`
+	KeepInTouch []Nudge       `json:"keep_in_touch"`
 }
 
 // Today gathers what needs attention. Cold clients never appear: working
@@ -43,7 +44,7 @@ func (s *Store) Today(q Quiet) (Today, []Problem, error) {
 	now := s.Now()
 	today := now.Format(dateLayout)
 	weekEnd := now.AddDate(0, 0, 6).Format(dateLayout)
-	t := Today{Date: today, Overdue: []FollowUp{}, Unpaid: []Invoice{}, Quotes: []Quote{}, ThisWeek: []FollowUp{}, Engagements: []Engagement{}, Moves: []Nudge{}, KeepInTouch: []Nudge{}}
+	t := Today{Date: today, Overdue: []FollowUp{}, Unpaid: []Invoice{}, Quotes: []Quote{}, Retainers: []RetainerDue{}, ThisWeek: []FollowUp{}, Engagements: []Engagement{}, Moves: []Nudge{}, KeepInTouch: []Nudge{}}
 
 	clients, problems, err := s.Clients()
 	if err != nil {
@@ -82,6 +83,13 @@ func (s *Store) Today(q Quiet) (Today, []Problem, error) {
 		}
 	}
 	slices.SortStableFunc(t.Quotes, func(a, b Quote) int { return strings.Compare(a.Sent, b.Sent) })
+
+	if t.Retainers, err = s.RetainersDue(); err != nil {
+		return t, nil, err
+	}
+	if t.Retainers == nil {
+		t.Retainers = []RetainerDue{}
+	}
 
 	lastContact := map[string]string{}
 	for _, l := range logs {

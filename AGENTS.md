@@ -162,6 +162,14 @@ need the KoSIT validator. E-invoicing is opt-in: `issue` only attempts UBL
 once `business.peppol_id` is set, so freelancers not on Peppol never see it.
 Peppol IDs are never derived from VAT numbers.
 
+**Retainer months due are derived** (`RetainersDue`): every finished month
+from the engagement's start to its end or last month, less any month an
+invoice covers (`period` plus `engagements`, ignoring fully credited ones).
+Billed in arrears, so the current month is never due. Without a start date
+only the latest finished month is offered, never a guessed backlog.
+`DraftRetainer` is `AddInvoice` restricted to one engagement
+(`NewInvoice.Engagement`), so the same double-billing guard applies.
+
 **Invoice numbers are derived** from existing files (`nextNumber`), per year
 of the issue date, under the store lock. There is no counter. A gap would
 need a deleted issued invoice, and issued invoices cannot be discarded.

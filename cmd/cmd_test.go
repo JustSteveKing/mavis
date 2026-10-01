@@ -467,3 +467,26 @@ func TestEInvoiceOnceOptedIn(t *testing.T) {
 		t.Fatalf("issue with everything set:\n%s", out)
 	}
 }
+
+func TestRetainersFromTheCLI(t *testing.T) {
+	setup(t)
+	mustRun(t, "client", "add", "globex")
+	mustRun(t, "engagement", "add", "globex", "care", "--title", "Care plan", "--basis", "retainer", "--rate", "800", "--start", "2026-01-10")
+
+	// Months are due once over; how many depends on today, so check the
+	// shape rather than the count.
+	out := mustRun(t, "invoice", "retainers")
+	if !strings.Contains(out, "Care plan") || !strings.Contains(out, "January 2026") || !strings.Contains(out, "--draft") {
+		t.Fatalf("list:\n%s", out)
+	}
+	if out := mustRun(t, "today"); !strings.Contains(out, "Retainers to bill") {
+		t.Fatalf("today:\n%s", out)
+	}
+	out = mustRun(t, "invoice", "retainers", "--draft")
+	if !strings.Contains(out, "Drafted draft-globex-care-2026-01: 960.00 GBP") {
+		t.Fatalf("draft:\n%s", out)
+	}
+	if out := mustRun(t, "invoice", "retainers"); out != "No retainer months to bill.\n" {
+		t.Fatalf("after drafting: %q", out)
+	}
+}

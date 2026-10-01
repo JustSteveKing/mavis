@@ -66,6 +66,14 @@ mavis suggests moves; it never makes them. Cold clients are never shown.`,
 				}
 				w.Flush()
 			}
+			if len(t.Retainers) > 0 {
+				w := section("Retainers to bill")
+				for _, r := range t.Retainers {
+					fmt.Fprintf(w, "  %s\t%s · %s · %s\n", r.Client, r.Title, monthName(r.Month), r.Rate)
+				}
+				w.Flush()
+				a.printf("  Draft them with: mavis invoice retainers --draft\n")
+			}
 			if len(t.Quotes) > 0 {
 				w := section("Quotes waiting")
 				for _, q := range t.Quotes {
@@ -147,4 +155,12 @@ func daysFrom(date, today string) (int, bool) {
 		return 0, false
 	}
 	return int(t.Sub(d).Hours() / 24), true
+}
+
+func monthName(month string) string {
+	t, err := time.Parse("2006-01", month)
+	if err != nil {
+		return month
+	}
+	return t.Format("January 2006")
 }

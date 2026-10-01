@@ -348,6 +348,10 @@ type NewInvoice struct {
 	Client string
 	Month  string // YYYY-MM: build lines from that month's time and retainers
 	Lines  []ManualLine
+
+	// Engagement limits a month's lines to one engagement, by exact slug.
+	// Retainer drafts use it to bill the retainer and nothing else.
+	Engagement string
 }
 
 // Skipped is an engagement left off a draft, and why.
@@ -384,7 +388,7 @@ func (s *Store) AddInvoice(in NewInvoice) (Invoice, []Skipped, error) {
 		var lines []Line
 		var covered []string
 		if in.Month != "" {
-			lines, covered, skipped, err = s.linesForMonth(client, in.Month, monthLabel, vat)
+			lines, covered, skipped, err = s.linesForMonth(client, in.Month, monthLabel, vat, in.Engagement)
 			if err != nil {
 				return err
 			}
@@ -405,6 +409,9 @@ func (s *Store) AddInvoice(in NewInvoice) (Invoice, []Skipped, error) {
 			return err
 		}
 		name := "draft-" + client.Slug
+		if in.Engagement != "" {
+			name = "draft-" + in.Engagement
+		}
 		if in.Month != "" {
 			name += "-" + in.Month
 		}
@@ -442,7 +449,7 @@ func (s *Store) AddInvoice(in NewInvoice) (Invoice, []Skipped, error) {
 }
 
 // linesForMonth builds one line per engagement of the client for a month.
-func (s *Store) linesForMonth(client Client, month, label string, vat int) ([]Line, []string, []Skipped, error) {
+func (s *Store) linesForMonth(client Client, month, label string, vat int, only string) ([]Line, []string, []Skipped, error) {
 	engagements, _, err := s.Engagements()
 	if err != nil {
 		return nil, nil, nil, err
@@ -478,7 +485,7 @@ func (s *Store) linesForMonth(client Client, month, label string, vat int) ([]Li
 	var covered []string
 	var skipped []Skipped
 	for _, e := range engagements {
-		if e.Client != client.Slug {
+		if e.Client != client.Slug || (only != "" && e.Slug != only) {
 			continue
 		}
 		hasTime := minutes[e.Slug] > 0

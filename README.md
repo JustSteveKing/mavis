@@ -252,6 +252,24 @@ VAT follows the client. A client in the UK, or with no country set, is
 charged 20%. Anywhere else is reverse charged at 0%. `client set
 --vat-treatment` overrides either way.
 
+### Retainers
+
+Retainers are billed in arrears, one invoice per month: November's is due
+from 1 December, and `today` says so.
+
+```bash
+mavis invoice retainers           # what is due
+mavis invoice retainers --draft   # draft each one
+```
+
+Each draft holds the retainer and nothing else, named
+`draft-<engagement>-<month>`, ready to check and issue. Any day or hourly
+work for the same client goes on its own invoice as before. Every finished
+month since the retainer started stays listed until something bills it, so
+a month you forgot comes back instead of slipping by. A retainer with no
+start date offers only its most recent month. Paused retainers are never
+due, and a done one stops at its end date.
+
 ### Issuing
 
 ```bash
