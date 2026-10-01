@@ -32,8 +32,7 @@ and knew exactly who still owed you.
 
 mavis is early. What exists today is the client side (clients, engagements,
 the log of calls and notes, follow-ups, `today`), time tracking, stats, and
-invoices from draft to paid. A PDF of each invoice, and credit notes, come
-next. Time and invoicing are both optional: if you only want
+invoices from draft to PDF to paid. Credit notes come next. Time and invoicing are both optional: if you only want
 somewhere to keep track of clients, you never have to meet either.
 
 ## Install
@@ -246,6 +245,17 @@ they said. After that an invoice does not change, except to be marked paid;
 invoice's lines are edited by hand, mavis notices that they no longer add up
 to the totals it was issued with and refuses to read it, because the
 correction for an issued invoice is a credit note.
+
+Issuing also writes the PDF, to `.invoices/INV-2026-001.pdf` under your
+records directory. The folder is dot-prefixed so Obsidian leaves the
+binaries out of its index. `mavis invoice pdf` regenerates one, writes it
+elsewhere with `--out`, or previews a draft, which is headed DRAFT INVOICE
+and carries no number so it cannot pass for the real thing. An issued
+invoice's PDF is drawn from the details copied into it, so regenerating one
+from last year gives you last year's invoice.
+
+The PDF uses the standard PDF fonts, which cover £, € and accented Latin
+letters but not other scripts.
 
 Overdue invoices head `today`, and `stats` gains an invoices section once
 anything has been issued: issued and paid in the period, and what is unpaid

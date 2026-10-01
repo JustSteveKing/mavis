@@ -2,10 +2,12 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/JustSteveKing/mavis/internal/money"
+	"github.com/JustSteveKing/mavis/internal/pdf"
 	"github.com/JustSteveKing/mavis/internal/store"
 	"github.com/spf13/cobra"
 )
@@ -23,6 +25,7 @@ func newInvoiceCommand(a *app) *cobra.Command {
 		newInvoiceEditCommand(a),
 		newInvoiceDiscardCommand(a),
 		newInvoiceIssueCommand(a),
+		newInvoicePDFCommand(a),
 		newInvoicePaidCommand(a, true),
 		newInvoicePaidCommand(a, false),
 	)
@@ -328,10 +331,18 @@ apart from being marked paid; mistakes are corrected with a credit note.`,
 			if err != nil {
 				return err
 			}
+			path, pdfErr := pdf.Write(s.Root(), inv)
 			if a.jsonOut {
-				return a.emitJSON(inv)
+				return a.emitJSON(struct {
+					store.Invoice
+					PDF string `json:"pdf,omitempty"`
+				}{inv, path})
 			}
 			a.printf("Issued %s to %s: %s %s, due %s\n", inv.Number, inv.ToName, inv.Total.Display(), inv.Currency, inv.Due)
+			if pdfErr != nil {
+				return fmt.Errorf("%s is issued, but its PDF failed: %w; try mavis invoice pdf %s", inv.Number, pdfErr, inv.Number)
+			}
+			a.printf("%s\n", path)
 			return nil
 		},
 	}
@@ -373,5 +384,51 @@ func newInvoicePaidCommand(a *app, paid bool) *cobra.Command {
 	if paid {
 		cmd.Flags().StringVar(&date, "date", "", "when it was paid, YYYY-MM-DD, today or yesterday (default: today)")
 	}
+	return cmd
+}
+
+func newInvoicePDFCommand(a *app) *cobra.Command {
+	var out string
+	cmd := &cobra.Command{
+		Use:   "pdf <invoice>",
+		Short: "Write an invoice's PDF",
+		Long: `Writes the invoice to .invoices/<number>.pdf under the records directory,
+or to --out. issue does this already; use this to regenerate one, or to
+preview a draft, which is marked DRAFT INVOICE and carries no number.
+
+An issued invoice is drawn from the details copied into it at issue, so it
+comes out the same however the config or the client has changed since.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			s, err := a.openStore()
+			if err != nil {
+				return err
+			}
+			inv, err := s.ResolveInvoice(args[0])
+			if err != nil {
+				return err
+			}
+			var path string
+			if out != "" {
+				data, err := pdf.Render(inv, pdf.Options{})
+				if err != nil {
+					return err
+				}
+				path = out
+				err = os.WriteFile(out, data, 0o644)
+				if err != nil {
+					return err
+				}
+			} else if path, err = pdf.Write(s.Root(), inv); err != nil {
+				return err
+			}
+			if a.jsonOut {
+				return a.emitJSON(map[string]string{"invoice": args[0], "pdf": path})
+			}
+			a.printf("%s\n", path)
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&out, "out", "o", "", "write here instead")
 	return cmd
 }

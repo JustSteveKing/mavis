@@ -335,11 +335,13 @@ func TestIssueAndPay(t *testing.T) {
 	mustRun(t, "client", "set", "acme", "--address", "1 High Street")
 
 	out := mustRun(t, "invoice", "issue", "acme", "--date", "2026-01-05")
-	if out != "Issued INV-2026-001 to Acme Ltd: 1,200.00 GBP, due 2026-02-04\n" {
+	if !strings.HasPrefix(out, "Issued INV-2026-001 to Acme Ltd: 1,200.00 GBP, due 2026-02-04\n") || !strings.HasSuffix(out, ".invoices/INV-2026-001.pdf\n") {
 		t.Fatalf("issue: %q", out)
 	}
-	if _, err := os.Stat(dir + "/invoices/INV-2026-001.md"); err != nil {
-		t.Fatal(err)
+	for _, f := range []string{"/invoices/INV-2026-001.md", "/.invoices/INV-2026-001.pdf"} {
+		if _, err := os.Stat(dir + f); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if out := mustRun(t, "today"); !strings.Contains(out, "Overdue invoices") || !strings.Contains(out, "INV-2026-001") {
 		t.Fatalf("today:\n%s", out)

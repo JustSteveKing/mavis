@@ -115,6 +115,17 @@ invoice, never the client record. It also stores `net`, `vat` and `total`;
 `checkFrozen` recomputes from the lines and refuses a file whose lines no
 longer match, which is how a hand edit after issue is caught.
 
+**PDFs come from `internal/pdf`, rendered with maroto v2.** Chosen
+because it is maintained and lays out in rows and columns; go-pdf/fpdf and
+jung-kurt/gofpdf are archived. It costs binary size: stripped, mavis went
+from 4.4 MB to 18.3 MB, nearly all of it maroto's dependencies. Rendering
+reads only the invoice's snapshot fields. Text goes through the core fonts'
+Windows-1252, so characters outside it are lost; embedding a TTF would fix
+that. Tests render with `Options{Uncompressed: true}` and search the bytes,
+so they need no PDF tooling in CI. The `cmd` layer writes the PDF after
+`IssueInvoice` returns, because the store cannot import `pdf` (which imports
+the store); a failed PDF leaves the invoice issued and says how to retry.
+
 **Invoice numbers are derived** from existing files (`nextNumber`), per year
 of the issue date, under the store lock. There is no counter. A gap would
 need a deleted issued invoice, and issued invoices cannot be discarded.
