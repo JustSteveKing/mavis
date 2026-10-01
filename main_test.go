@@ -39,8 +39,11 @@ func TestNoBackgroundQuery(t *testing.T) {
 	start := time.Now()
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
+	// The reader owns out until it finishes; read it only after readDone.
 	var out bytes.Buffer
+	readDone := make(chan struct{})
 	go func() {
+		defer close(readDone)
 		buf := make([]byte, 4096)
 		for {
 			n, err := tty.Read(buf)
@@ -57,7 +60,10 @@ func TestNoBackgroundQuery(t *testing.T) {
 		cmd.Process.Kill()
 		t.Fatal("mavis --version took over 4s on a terminal that does not answer: it is waiting on a terminal query")
 	}
-	if elapsed := time.Since(start); elapsed > 2*time.Second {
+	elapsed := time.Since(start)
+	tty.Close() // ends the reader's blocked Read
+	<-readDone
+	if elapsed > 2*time.Second {
 		t.Errorf("mavis --version took %s", elapsed)
 	}
 	if bytes.Contains(out.Bytes(), []byte("\x1b]11;?")) {
