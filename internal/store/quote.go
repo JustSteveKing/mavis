@@ -49,9 +49,9 @@ type Quote struct {
 	Scope    string      `json:"scope,omitempty"`
 	Lines    []Line      `json:"lines"`
 	VATLines []VATLine   `json:"vat_lines"`
-	Net      money.Pence `json:"net"`
-	VAT      money.Pence `json:"vat"`
-	Total    money.Pence `json:"total"`
+	Net      money.Pence `json:"net_pence"`
+	VAT      money.Pence `json:"vat_pence"`
+	Total    money.Pence `json:"total_pence"`
 
 	Path string `json:"path"`
 }
@@ -249,6 +249,7 @@ func (s *Store) AddQuote(in NewQuote) (Quote, error) {
 		d.Set("vat_treatment", client.Treatment())
 		d.SetPlain("valid_days", strconv.Itoa(in.ValidDays))
 		d.SetPlain("created", s.today())
+		s.stamp(d)
 		var body strings.Builder
 		if scope := strings.TrimSpace(in.Scope); scope != "" {
 			body.WriteString(scope + "\n\n")

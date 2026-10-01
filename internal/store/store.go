@@ -45,6 +45,18 @@ type Store struct {
 
 	// DayMinutes is a working day, for converting between days and hours.
 	DayMinutes int
+
+	// Actor, when set, is stamped as `by` on every record this store
+	// creates. The MCP server sets it to "agent", so a note an agent wrote
+	// can always be told from one a person did.
+	Actor string
+}
+
+// stamp marks a new record with who made it, when that is known.
+func (s *Store) stamp(d interface{ Set(string, string) }) {
+	if s.Actor != "" {
+		d.Set("by", s.Actor)
+	}
 }
 
 // Open returns the store at root, which must already exist.

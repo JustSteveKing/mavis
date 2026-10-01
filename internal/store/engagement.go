@@ -175,6 +175,7 @@ func (s *Store) AddEngagement(in NewEngagement) (Engagement, error) {
 		if in.Quote != "" {
 			d.Set("quote", link(in.Quote))
 		}
+		s.stamp(d)
 
 		if err := write(path, d); err != nil {
 			return err

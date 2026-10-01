@@ -184,6 +184,7 @@ func (s *Store) AddClient(in NewClient) (Client, error) {
 		d.Set("currency", "GBP")
 		d.SetPlain("terms_days", "30")
 		d.SetPlain("created", today)
+		s.stamp(d)
 
 		if err := write(path, d); err != nil {
 			return err

@@ -27,15 +27,15 @@ type Line struct {
 	Description string      `json:"description"`
 	Qty         string      `json:"qty"`
 	Unit        string      `json:"unit,omitempty"`
-	Price       money.Pence `json:"price"`
-	VAT         int         `json:"vat_bp"` // basis points: 2000 is 20%
-	Amount      money.Pence `json:"amount"` // always Qty times Price
+	Price       money.Pence `json:"price_pence"`
+	VAT         int         `json:"vat_bp"`       // basis points: 2000 is 20%
+	Amount      money.Pence `json:"amount_pence"` // always Qty times Price
 }
 
 type VATLine struct {
 	Rate int         `json:"rate_bp"`
-	Net  money.Pence `json:"net"`
-	VAT  money.Pence `json:"vat"`
+	Net  money.Pence `json:"net_pence"`
+	VAT  money.Pence `json:"vat_pence"`
 }
 
 type Invoice struct {
@@ -72,14 +72,14 @@ type Invoice struct {
 
 	Lines    []Line      `json:"lines"`
 	VATLines []VATLine   `json:"vat_lines"`
-	Net      money.Pence `json:"net"`
-	VAT      money.Pence `json:"vat"`
-	Total    money.Pence `json:"total"`
+	Net      money.Pence `json:"net_pence"`
+	VAT      money.Pence `json:"vat_pence"`
+	Total    money.Pence `json:"total_pence"`
 
 	// Derived from issued credit notes, never stored. Balance is what is
 	// still owed: nothing for a draft, a paid invoice or a credit note.
-	Credited money.Pence `json:"credited"`
-	Balance  money.Pence `json:"balance"`
+	Credited money.Pence `json:"credited_pence"`
+	Balance  money.Pence `json:"balance_pence"`
 
 	Path string `json:"path"`
 }
@@ -437,6 +437,7 @@ func (s *Store) AddInvoice(in NewInvoice) (Invoice, []Skipped, error) {
 			d.SetList("engagements", links)
 		}
 		d.SetPlain("created", s.today())
+		s.stamp(d)
 		d.Body = renderLines(lines)
 
 		if err := write(path, d); err != nil {
@@ -650,6 +651,7 @@ func (s *Store) AddCreditNote(query string, full bool, manual []ManualLine) (Inv
 		d.Set("currency", inv.Currency)
 		d.Set("vat_treatment", inv.VATTreatment)
 		d.SetPlain("created", s.today())
+		s.stamp(d)
 		d.Body = renderLines(lines)
 		if err := write(path, d); err != nil {
 			return err

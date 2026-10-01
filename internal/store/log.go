@@ -222,6 +222,7 @@ func (s *Store) AddLog(in NewLog) (LogEntry, error) {
 		if in.Reminder > 0 {
 			d.SetPlain("reminder", strconv.Itoa(in.Reminder))
 		}
+		s.stamp(d)
 
 		var body strings.Builder
 		if summary := strings.TrimSpace(in.Summary); summary != "" {
@@ -409,4 +410,39 @@ func (s *Store) Reminders(number string) ([]LogEntry, error) {
 		}
 	}
 	return out, nil
+}
+
+// CompleteFollowUpExact ticks the open follow-up with exactly this text in
+// one log entry. Agents use it: they name what they mean rather than have a
+// substring matched on their behalf.
+func (s *Store) CompleteFollowUpExact(logSlug, text string) (FollowUp, error) {
+	var out FollowUp
+	err := s.withLock(func() error {
+		path := filepath.Join(s.root, LogDir, logSlug+".md")
+		d, err := read(path)
+		if err != nil {
+			return fmt.Errorf("log entry %q: %w", logSlug, ErrNotFound)
+		}
+		l := logFrom(path, d)
+		for _, f := range l.FollowUps {
+			if f.Text != text {
+				continue
+			}
+			if f.Done {
+				return fmt.Errorf("%q in %s is already done", text, logSlug)
+			}
+			lines := strings.Split(d.Body, "\n")
+			m := checkbox.FindStringSubmatch(lines[f.line])
+			lines[f.line] = m[1] + "x" + m[3] + m[4]
+			d.Body = strings.Join(lines, "\n")
+			if err := write(path, d); err != nil {
+				return err
+			}
+			f.Done = true
+			out = f
+			return nil
+		}
+		return fmt.Errorf("no follow-up %q in %s: %w", text, logSlug, ErrNotFound)
+	})
+	return out, err
 }

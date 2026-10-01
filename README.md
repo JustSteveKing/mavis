@@ -440,6 +440,32 @@ whichever is later. Moving a client is a fresh decision, so it resets the
 clock. Cold clients never appear; `mavis client list --status cold` is there
 for when you mean to work through them.
 
+## Agents
+
+mavis runs as an MCP server, so an agent such as Claude can keep your
+records with you:
+
+```bash
+claude mcp add mavis -- mavis mcp
+```
+
+Tell it about a call and it logs the call with its follow-ups. Ask what
+needs doing and it reads `today`. Ask it to get October's billing ready and
+it drafts the invoices.
+
+**It drafts; you commit.** An agent can read everything, keep clients,
+engagements and the log, log time, and draft invoices, quotes, credit notes
+and reminder emails. It cannot issue an invoice, send a quote, mark
+anything paid, answer a quote or record a reminder as sent. Those tools do
+not exist on the server at all. When a draft is ready the agent gives you
+the command to run.
+
+Agents name records by their exact slug or number, never a fuzzy match,
+because a wrong guess you would notice and retype is one an agent would act
+on. Everything an agent creates is stamped `by: agent`, so in Obsidian you
+can always tell its notes from yours. It is also told not to move a client
+between warm and cold on its own judgement: `today` suggests, you decide.
+
 ## The files
 
 ```

@@ -48,8 +48,8 @@ type EngagementStat struct {
 	Rate       string       `json:"rate,omitempty"`
 	Currency   string       `json:"currency"`
 	Minutes    int          `json:"minutes"`
-	Value      *money.Pence `json:"value,omitempty"`
-	PerDay     *money.Pence `json:"per_day,omitempty"`
+	Value      *money.Pence `json:"value_pence,omitempty"`
+	PerDay     *money.Pence `json:"per_day_pence,omitempty"`
 }
 
 // FixedStat is fixed-price work measured to date, not per period: what the
@@ -60,26 +60,26 @@ type FixedStat struct {
 	Title      string       `json:"title"`
 	Status     string       `json:"status"`
 	Currency   string       `json:"currency"`
-	Budget     money.Pence  `json:"budget"`
+	Budget     money.Pence  `json:"budget_pence"`
 	Minutes    int          `json:"minutes"`
-	PerDay     *money.Pence `json:"per_day,omitempty"`
+	PerDay     *money.Pence `json:"per_day_pence,omitempty"`
 }
 
 // Total is per currency. Amounts in different currencies are never added.
 type Total struct {
 	Currency string       `json:"currency"`
 	Minutes  int          `json:"minutes"`
-	Value    money.Pence  `json:"value"`
-	PerDay   *money.Pence `json:"per_day,omitempty"`
+	Value    money.Pence  `json:"value_pence"`
+	PerDay   *money.Pence `json:"per_day_pence,omitempty"`
 }
 
 // InvoiceTotal sums invoices in one currency.
 type InvoiceTotal struct {
 	Currency string      `json:"currency"`
 	Count    int         `json:"count"`
-	Net      money.Pence `json:"net"`
-	VAT      money.Pence `json:"vat"`
-	Total    money.Pence `json:"total"`
+	Net      money.Pence `json:"net_pence"`
+	VAT      money.Pence `json:"vat_pence"`
+	Total    money.Pence `json:"total_pence"`
 }
 
 // Invoicing is what invoices say, as opposed to what time is worth. It is
@@ -97,7 +97,7 @@ type Invoicing struct {
 type QuoteTotal struct {
 	Currency string      `json:"currency"`
 	Count    int         `json:"count"`
-	Net      money.Pence `json:"net"`
+	Net      money.Pence `json:"net_pence"`
 }
 
 // Quoting is the pipeline. Absent until a quote has been sent.

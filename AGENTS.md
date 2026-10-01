@@ -179,6 +179,21 @@ said, so it must be true on its day. The Late Payment Act paragraph is
 opt-in (`invoicing.statutory_notice`), and its compensation bands (£40
 under £1,000, £70 under £10,000, £100 above) were checked against GOV.UK.
 
+**`internal/mcpserver` is the agent surface, and its boundary is the
+point.** Agents get reads, record keeping and drafts; issuing, sending,
+paying, answering quotes, recording reminders as sent and discarding drafts
+are deliberately absent, and `TestTheLineIsHeld` fails if a tool name
+containing issue, send, paid, accept, decline, discard or delete appears.
+Adding one is a product decision, not a refactor. Tools take exact slugs and
+numbers (the `client`, `engagement`, `invoice` and `quote` helpers reject
+anything the fuzzy resolver would have had to guess). `mavis mcp` sets
+`Store.Actor` to `agent`, which stamps `by: agent` on created records.
+Money fields in JSON are integer pence and named `*_pence`, for agents and
+`--json` alike; making them strings would hit the schema-inference trap
+taskgo found (a custom MarshalJSON on a numeric type). The stdio runner
+returns nil on a client disconnect, as taskgo's does, for the same reason.
+`instructions.go` is what every connecting agent is told; keep it short.
+
 **Invoice numbers are derived** from existing files (`nextNumber`), per year
 of the issue date, under the store lock. There is no counter. A gap would
 need a deleted issued invoice, and issued invoices cannot be discarded.
