@@ -30,10 +30,10 @@ Keep in touch
 Named for the 1920s private secretary, who took your calls, kept your diary
 and knew exactly who still owed you.
 
-mavis is early. What exists today is the client side: clients, engagements,
-the log of calls and notes, follow-ups, and `today`. Time tracking and
-invoicing come next, and both stay optional. If you only want somewhere to
-keep track of clients, you never have to meet either.
+mavis is early. What exists today is the client side (clients, engagements,
+the log of calls and notes, follow-ups, `today`) and time tracking.
+Invoicing comes next. Time and invoicing are both optional: if you only want
+somewhere to keep track of clients, you never have to meet either.
 
 ## Install
 
@@ -54,7 +54,7 @@ cd mavis && go build -ldflags "-X main.version=$(git describe --tags --always)" 
 mavis init ~/business
 ```
 
-That creates `clients/`, `engagements/` and `log/` in `~/business` and
+That creates `clients/`, `engagements/`, `log/` and `time/` in `~/business` and
 remembers it as your records directory. Run it inside an Obsidian vault and
 the records become notes in it.
 
@@ -144,6 +144,35 @@ Because they are plain checkboxes, you can tick them in Obsidian just as well
 as with `mavis done`, and add new ones by hand anywhere in an entry. The one
 piece of syntax mavis reads is a trailing `(due YYYY-MM-DD)`.
 
+## Time
+
+Log time after the fact, in days or hours, whichever suits the work:
+
+```bash
+mavis time reporting 1d "Report filters"
+mavis time reporting 2h "Call with Jo" --date yesterday
+mavis time list                          # this month
+mavis time list --month 2026-09 --client acme
+```
+
+Durations are `1d`, `0.5d`, `3h`, `45m` or `1h30m`. A day is 7.5 hours unless
+you set `day_hours` in the config, and listings total in both.
+
+Each engagement gets one timesheet a month, `time/acme-reporting-2026-10.md`,
+holding a table:
+
+```markdown
+| Date | Time | What |
+|------|------|------|
+| 2026-10-06 | 1d | Report filters |
+| 2026-10-07 | 2h | Call with Jo |
+```
+
+Fix a mistake by editing the table, in Obsidian or with
+`mavis time edit reporting`. A row mavis cannot read is reported with its line
+number and left out of the totals, rather than hiding the rest of the sheet.
+New rows go at the end of the table, so a note you write under it stays put.
+
 ## today
 
 `today` is the one to run each morning. It shows overdue follow-ups and those
@@ -165,6 +194,7 @@ for when you mean to work through them.
 clients/acme.md
 engagements/acme-reporting.md
 log/2026-10-01-acme-call.md
+time/acme-reporting-2026-10.md
 ```
 
 A log entry looks like this:
@@ -207,13 +237,14 @@ are yours to add, and these are the defaults:
 
 ```yaml
 root: /home/you/business
+day_hours: 7.5
 thresholds:
   active_quiet: 14
   warm_keep_in_touch: 30
   warm_to_cold: 60
 ```
 
-Every threshold is optional. `--root` or `MAVIS_ROOT` override `root` for
+Everything but `root` is optional. `--root` or `MAVIS_ROOT` override `root` for
 one command, and every command takes `--json`.
 
 ## Licence

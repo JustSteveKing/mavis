@@ -31,7 +31,7 @@ const (
 	LogDir         = "log"
 )
 
-var sections = []string{ClientsDir, EngagementsDir, LogDir}
+var sections = []string{ClientsDir, EngagementsDir, LogDir, TimeDir}
 
 const dateLayout = "2006-01-02"
 

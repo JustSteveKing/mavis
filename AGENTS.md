@@ -87,6 +87,19 @@ substring of slug or name; several matches return `*AmbiguousError` listing
 them. `CompleteFollowUp` follows the same rule. Acting on the wrong record is
 worse than asking the user to retype.
 
+**Timesheets are tables, parsed row by row.** One file per engagement per
+month (`time/<engagement>-<YYYY-MM>.md`), because that is the unit that gets
+invoiced and it keeps the engagement's backlinks. A row that will not parse
+becomes a `Problem` with its line number; it never fails the listing.
+`appendRow` inserts after the last table row so prose below the table stays
+below it. Pipes in descriptions are escaped as `\|` and `cells` unescapes them.
+
+**Durations are minutes against a configurable day.** `internal/duration`
+converts `1d`, `3h`, `1h30m` to minutes using `Store.DayMinutes`, set from
+`day_hours`. The sheet keeps what was typed (`1d`), so changing the day length
+later re-values old entries; that is intended, since a day rate is a rate per
+day, whatever a day is.
+
 **Money is never a float.** Files hold decimal strings (`"650.00"`);
 `internal/money` parses them to integer pence and refuses more than two
 decimal places rather than rounding.

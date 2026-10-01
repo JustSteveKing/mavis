@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -198,5 +199,32 @@ func TestTodayShowsOverdueAndActiveWork(t *testing.T) {
 	var parsed map[string]any
 	if err := json.Unmarshal([]byte(mustRun(t, "today", "--json")), &parsed); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestTime(t *testing.T) {
+	setup(t)
+	mustRun(t, "client", "add", "acme")
+	mustRun(t, "engagement", "add", "acme", "reporting", "--basis", "day", "--rate", "650")
+
+	if out := mustRun(t, "time", "reporting", "1d", "Report", "filters", "--date", "2026-10-06"); out != "Logged 1d on 2026-10-06 to acme-reporting\n" {
+		t.Fatalf("log: %q", out)
+	}
+	mustRun(t, "time", "reporting", "1h30m", "--date", "2026-10-07")
+	mustRun(t, "time", "reporting", "2h", "--date", "2026-09-30")
+
+	out := mustRun(t, "time", "list", "--month", "2026-10")
+	if !strings.Contains(out, "Report filters") || strings.Contains(out, "2026-09-30") || !regexp.MustCompile(`Total\s+1\.2d\s+9h`).MatchString(out) {
+		t.Fatalf("list:\n%s", out)
+	}
+	if out := mustRun(t, "time", "list", "--month", "all", "--client", "acme"); !strings.Contains(out, "2026-09-30") {
+		t.Fatalf("all months:\n%s", out)
+	}
+	// Not a terminal, so edit prints the path instead of opening an editor.
+	if out := mustRun(t, "time", "edit", "reporting", "--month", "2026-10"); !strings.HasSuffix(strings.TrimSpace(out), "time/acme-reporting-2026-10.md") {
+		t.Fatalf("edit: %q", out)
+	}
+	if _, err := run(t, "time", "reporting", "ages"); err == nil {
+		t.Fatal("a bad duration should fail")
 	}
 }
