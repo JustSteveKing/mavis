@@ -130,3 +130,48 @@ func TestEngagements(t *testing.T) {
 		t.Fatalf("show after done:\n%s", out)
 	}
 }
+
+func TestLogFollowUpsAndDone(t *testing.T) {
+	setup(t)
+	t.Setenv("EDITOR", "false") // would fail if it were ever opened
+	mustRun(t, "client", "add", "acme", "--name", "Acme Ltd")
+	mustRun(t, "engagement", "add", "acme", "reporting")
+
+	out := mustRun(t, "log", "call", "acme", "Scoped", "the", "module", "-e", "reporting",
+		"-f", "Send estimate", "-f", "Share staging", "--due", "2026-01-01", "--due", "+7d")
+	if !strings.Contains(out, "Logged call with acme: log/") || !strings.Contains(out, "2 follow-ups") {
+		t.Fatalf("log: %q", out)
+	}
+	// No summary, but tests have no terminal, so no editor.
+	mustRun(t, "note", "acme")
+
+	out = mustRun(t, "follow-ups", "--overdue")
+	if !strings.Contains(out, "Send estimate") || strings.Contains(out, "Share staging") || !strings.Contains(out, "2026-01-01 !") {
+		t.Fatalf("overdue:\n%s", out)
+	}
+
+	out = mustRun(t, "client", "show", "acme")
+	for _, want := range []string{"Follow-ups", "Recent", "Scoped the module"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("client show missing %q:\n%s", want, out)
+		}
+	}
+
+	if out := mustRun(t, "done", "acme", "estimate"); out != "Done: Send estimate (acme)\n" {
+		t.Fatalf("done: %q", out)
+	}
+	if out := mustRun(t, "follow-ups"); strings.Contains(out, "Send estimate") || !strings.Contains(out, "Share staging") {
+		t.Fatalf("after done:\n%s", out)
+	}
+}
+
+func TestDueNeedsMatchingFollowUps(t *testing.T) {
+	setup(t)
+	mustRun(t, "client", "add", "acme")
+	if _, err := run(t, "log", "call", "acme", "x", "--due", "+1d"); err == nil {
+		t.Error("--due without a follow-up should fail")
+	}
+	if _, err := run(t, "log", "call", "acme", "x", "-f", "a", "-f", "b", "-f", "c", "--due", "+1d", "--due", "+2d"); err == nil {
+		t.Error("mismatched --due count should fail")
+	}
+}

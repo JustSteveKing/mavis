@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"text/tabwriter"
 
@@ -131,11 +132,36 @@ func newClientShowCommand(a *app) *cobra.Command {
 				}
 			}
 
+			logs, problems, err := s.Logs()
+			if err != nil {
+				return err
+			}
+			a.warn(problems)
+			recent := []store.LogEntry{}
+			open := []store.FollowUp{}
+			for _, l := range logs {
+				if l.Client != c.Slug {
+					continue
+				}
+				recent = append(recent, l)
+				for _, f := range l.FollowUps {
+					if !f.Done {
+						open = append(open, f)
+					}
+				}
+			}
+			slices.Reverse(recent)
+			if len(recent) > 5 {
+				recent = recent[:5]
+			}
+
 			if a.jsonOut {
 				return a.emitJSON(struct {
 					store.Client
 					Engagements []store.Engagement `json:"engagements"`
-				}{c, engagements})
+					RecentLog   []store.LogEntry   `json:"recent_log"`
+					FollowUps   []store.FollowUp   `json:"follow_ups"`
+				}{c, engagements, recent, open})
 			}
 			a.printf("%s (%s)\n", c.Name, c.Slug)
 			status := c.Status
@@ -161,6 +187,18 @@ func newClientShowCommand(a *app) *cobra.Command {
 			if len(engagements) > 0 {
 				a.printf("\nEngagements\n")
 				a.engagementTable(engagements)
+			}
+			if len(open) > 0 {
+				a.printf("\nFollow-ups\n")
+				a.followUpTable(open, s.Now().Format("2006-01-02"))
+			}
+			if len(recent) > 0 {
+				a.printf("\nRecent\n")
+				w := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
+				for _, l := range recent {
+					fmt.Fprintf(w, "  %s\t%s\t%s\n", l.Date, l.Kind, firstLine(l.Summary))
+				}
+				return w.Flush()
 			}
 			return nil
 		},
@@ -192,4 +230,12 @@ func newClientMoveCommand(a *app, status string) *cobra.Command {
 			return nil
 		},
 	}
+}
+
+func firstLine(s string) string {
+	line, _, _ := strings.Cut(s, "\n")
+	if len(line) > 72 {
+		line = line[:69] + "..."
+	}
+	return line
 }
