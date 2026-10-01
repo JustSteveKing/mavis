@@ -9,6 +9,7 @@ import (
 
 	"github.com/JustSteveKing/mavis/internal/money"
 	"github.com/JustSteveKing/mavis/internal/pdf"
+	"github.com/JustSteveKing/mavis/internal/remind"
 	"github.com/JustSteveKing/mavis/internal/store"
 	"github.com/JustSteveKing/mavis/internal/ubl"
 	"github.com/spf13/cobra"
@@ -30,6 +31,7 @@ func newInvoiceCommand(a *app) *cobra.Command {
 		newInvoicePDFCommand(a),
 		newInvoiceUBLCommand(a),
 		newInvoiceRetainersCommand(a),
+		newInvoiceRemindCommand(a),
 		newInvoiceCreditCommand(a),
 		newInvoicePaidCommand(a, true),
 		newInvoicePaidCommand(a, false),
@@ -705,5 +707,121 @@ invoice is skipped unless that invoice was credited in full.`,
 		},
 	}
 	cmd.Flags().BoolVar(&draft, "draft", false, "draft an invoice for each month due")
+	return cmd
+}
+
+func newInvoiceRemindCommand(a *app) *cobra.Command {
+	var sent bool
+	var date string
+	cmd := &cobra.Command{
+		Use:   "remind <invoice>",
+		Short: "Draft a payment reminder for an overdue invoice",
+		Long: `Prints a reminder to send for an overdue invoice: a subject and a message
+to paste into an email, with the invoice's PDF to attach. mavis never sends
+anything itself.
+
+The wording follows the chase so far, counted from reminders in the
+client's log: a friendly first nudge, a second that points back at it, and
+a final one asking for payment within 7 days. Each is for the balance still
+owed, after any credit notes.
+
+Once you have sent it, run the same command with --sent. That logs it
+against the client as an email, with the message kept in the entry, so the
+next reminder knows where the chase has got to and today can say when
+another is due: 14 days after the last.
+
+Set invoicing.statutory_notice: true in the config to have the final
+reminder cite the Late Payment of Commercial Debts (Interest) Act 1998 and
+the fixed compensation it allows. It is off unless you turn it on.`,
+		Example: `  mavis invoice remind INV-2026-001
+  mavis invoice remind INV-2026-001 --sent`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			s, err := a.openStore()
+			if err != nil {
+				return err
+			}
+			inv, err := s.ResolveInvoice(args[0])
+			if err != nil {
+				return err
+			}
+			// The message is written as of the day it was sent: backdating a
+			// reminder must not log one that says "7 days overdue" about a day
+			// when it was 1.
+			today := s.Now().Format("2006-01-02")
+			if date != "" {
+				if len(date) < 10 {
+					return fmt.Errorf("date %q: use YYYY-MM-DD or YYYY-MM-DDTHH:MM", date)
+				}
+				today = date[:10]
+			}
+			earlier, err := s.Reminders(inv.Number)
+			if err != nil {
+				return err
+			}
+			var dates []string
+			for _, e := range earlier {
+				if d := e.Date[:10]; d <= today {
+					dates = append(dates, d)
+				}
+			}
+			contact := ""
+			if c, err := s.ResolveClient(inv.Client); err == nil {
+				contact = c.Contact
+			}
+			signoff := a.cfg.Business.Name
+			if signoff == "" {
+				signoff = inv.From.Name
+			}
+			r, err := remind.Write(remind.Input{
+				Invoice: inv, Contact: contact, Signoff: signoff, Earlier: dates, Today: today,
+				Statutory: a.cfg.Invoicing.StatutoryNotice,
+			})
+			if err != nil {
+				return err
+			}
+			pdfPath := filepath.Join(s.Root(), pdf.Dir, pdf.Name(inv.Number, inv.Slug))
+
+			if !sent {
+				if a.jsonOut {
+					return a.emitJSON(struct {
+						remind.Reminder
+						Attach string `json:"attach"`
+					}{r, pdfPath})
+				}
+				a.printf("Subject: %s\n\n%s\n\n", r.Subject, r.Body)
+				a.printf("Attach: %s\n", pdfPath)
+				a.printf("Once it is sent: mavis invoice remind %s --sent\n", inv.Number)
+				return nil
+			}
+
+			days := 0
+			if d1, err := time.Parse("2006-01-02", inv.Due); err == nil {
+				if d2, err := time.Parse("2006-01-02", today); err == nil {
+					days = int(d2.Sub(d1).Hours() / 24)
+				}
+			}
+			l, err := s.AddLog(store.NewLog{
+				Kind:     "email",
+				Client:   inv.Client,
+				Date:     date,
+				Summary:  fmt.Sprintf("Payment reminder %d for %s: %s %s, %d day%s overdue.", r.Stage, inv.Number, inv.Balance.Display(), inv.Currency, days, plural(days)),
+				Invoice:  inv.Number,
+				Reminder: r.Stage,
+				Message:  "Subject: " + r.Subject + "\n\n" + r.Body,
+			})
+			if err != nil {
+				return err
+			}
+			if a.jsonOut {
+				return a.emitJSON(l)
+			}
+			rel, _ := filepath.Rel(s.Root(), l.Path)
+			a.printf("Logged reminder %d for %s: %s\n", r.Stage, inv.Number, rel)
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&sent, "sent", false, "record that you sent it")
+	cmd.Flags().StringVar(&date, "date", "", "when you sent it, YYYY-MM-DD or YYYY-MM-DDTHH:MM (default: now)")
 	return cmd
 }

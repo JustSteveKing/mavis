@@ -45,6 +45,11 @@ type Invoicing struct {
 	// The default is a placeholder: check it against how your accountant or
 	// FreeAgent words it before issuing a real invoice.
 	ReverseChargeNote string `yaml:"reverse_charge_note"`
+
+	// StatutoryNotice adds a paragraph to the final payment reminder citing
+	// the Late Payment of Commercial Debts (Interest) Act 1998. Off unless
+	// set: it changes the tone with a client, so it is your call.
+	StatutoryNotice bool `yaml:"statutory_notice"`
 }
 
 const DefaultReverseChargeNote = "Reverse charge: the customer is to account for any VAT due."

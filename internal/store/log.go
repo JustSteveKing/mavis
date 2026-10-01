@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -30,7 +31,13 @@ type LogEntry struct {
 	With       []string   `json:"with,omitempty"`
 	Summary    string     `json:"summary,omitempty"`
 	FollowUps  []FollowUp `json:"follow_ups,omitempty"`
-	Path       string     `json:"path"`
+
+	// A payment reminder records the invoice it chased and which reminder
+	// it was, so the next one knows where the chase has got to.
+	Invoice  string `json:"invoice,omitempty"`
+	Reminder int    `json:"reminder,omitempty"`
+
+	Path string `json:"path"`
 }
 
 // FollowUp is a checkbox in a log entry's body.
@@ -85,11 +92,15 @@ func logFrom(path string, d *record.Document) LogEntry {
 		Date:       d.Get("date"),
 		Client:     linkTarget(d.Get("client")),
 		Engagement: linkTarget(d.Get("engagement")),
+		Invoice:    linkTarget(d.Get("invoice")),
 		With:       d.List("with"),
 		Summary:    summaryOf(d.Body),
 		Path:       path,
 	}
 	l.FollowUps = followUpsIn(d.Body, l.Client, l.Slug)
+	if n, err := strconv.Atoi(d.Get("reminder")); err == nil && n > 0 {
+		l.Reminder = n
+	}
 	return l
 }
 
@@ -133,6 +144,12 @@ type NewLog struct {
 	Kind, Client, Engagement, Summary, Date string
 	With                                    []string
 	FollowUps                               []NewFollowUp
+
+	// For a payment reminder: the invoice, which reminder this is, and the
+	// message as sent, kept in the entry as a record.
+	Invoice  string
+	Reminder int
+	Message  string
 }
 
 // AddLog writes a log entry. Date defaults to now, to the minute.
@@ -199,6 +216,12 @@ func (s *Store) AddLog(in NewLog) (LogEntry, error) {
 		if len(in.With) > 0 {
 			d.SetList("with", in.With)
 		}
+		if in.Invoice != "" {
+			d.Set("invoice", link(in.Invoice))
+		}
+		if in.Reminder > 0 {
+			d.SetPlain("reminder", strconv.Itoa(in.Reminder))
+		}
 
 		var body strings.Builder
 		if summary := strings.TrimSpace(in.Summary); summary != "" {
@@ -215,6 +238,15 @@ func (s *Store) AddLog(in NewLog) (LogEntry, error) {
 					body.WriteString(" (due " + f.Due + ")")
 				}
 				body.WriteString("\n")
+			}
+		}
+		if msg := strings.TrimSpace(in.Message); msg != "" {
+			if body.Len() > 0 {
+				body.WriteString("\n")
+			}
+			body.WriteString("## As sent\n")
+			for _, line := range strings.Split(msg, "\n") {
+				body.WriteString(strings.TrimRight("> "+line, " ") + "\n")
 			}
 		}
 		d.Body = body.String()
@@ -361,4 +393,20 @@ func (s *Store) CompleteFollowUp(clientQuery, query string) (FollowUp, error) {
 		return nil
 	})
 	return out, err
+}
+
+// Reminders lists the payment reminders logged against an invoice, oldest
+// first.
+func (s *Store) Reminders(number string) ([]LogEntry, error) {
+	logs, _, err := s.Logs()
+	if err != nil {
+		return nil, err
+	}
+	var out []LogEntry
+	for _, l := range logs {
+		if l.Invoice == number && l.Reminder > 0 {
+			out = append(out, l)
+		}
+	}
+	return out, nil
 }

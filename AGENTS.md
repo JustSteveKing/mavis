@@ -170,6 +170,15 @@ only the latest finished month is offered, never a guessed backlog.
 `DraftRetainer` is `AddInvoice` restricted to one engagement
 (`NewInvoice.Engagement`), so the same double-billing guard applies.
 
+**Reminders are log entries** with `invoice` and `reminder: N` in the
+frontmatter and the message under `## As sent`. The stage is counted from
+them (`store.Reminders`), never stored on the invoice. `internal/remind`
+drafts and never sends. A reminder written with `--date` is composed as of
+that date, counting only earlier reminders: the log is a record of what was
+said, so it must be true on its day. The Late Payment Act paragraph is
+opt-in (`invoicing.statutory_notice`), and its compensation bands (£40
+under £1,000, £70 under £10,000, £100 above) were checked against GOV.UK.
+
 **Invoice numbers are derived** from existing files (`nextNumber`), per year
 of the issue date, under the store lock. There is no counter. A gap would
 need a deleted issued invoice, and issued invoices cannot be discarded.

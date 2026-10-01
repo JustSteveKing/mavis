@@ -5,6 +5,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/JustSteveKing/mavis/internal/remind"
 	"github.com/JustSteveKing/mavis/internal/store"
 	"github.com/spf13/cobra"
 )
@@ -62,7 +63,7 @@ mavis suggests moves; it never makes them. Cold clients are never shown.`,
 			if len(t.Unpaid) > 0 {
 				w := section("Overdue invoices")
 				for _, inv := range t.Unpaid {
-					fmt.Fprintf(w, "  %s\t%s · %s %s owed · due %s (%s)\n", inv.Number, inv.Client, inv.Balance.Display(), inv.Currency, inv.Due, ago(inv.Due, t.Date))
+					fmt.Fprintf(w, "  %s\t%s · %s %s owed · due %s (%s) · %s\n", inv.Number, inv.Client, inv.Balance.Display(), inv.Currency, inv.Due, ago(inv.Due, t.Date), a.chase(s, inv, t.Date))
 				}
 				w.Flush()
 			}
@@ -163,4 +164,27 @@ func monthName(month string) string {
 		return month
 	}
 	return t.Format("January 2006")
+}
+
+// chase says where the reminders for an overdue invoice have got to.
+func (a *app) chase(s *store.Store, inv store.Invoice, today string) string {
+	earlier, err := s.Reminders(inv.Number)
+	if err != nil {
+		return ""
+	}
+	var dates []string
+	for _, e := range earlier {
+		dates = append(dates, e.Date[:10])
+	}
+	stage, due, from := remind.Next(inv, dates, today)
+	sent := "not chased yet"
+	if n := len(dates); n == 1 {
+		sent = "reminded " + dates[0]
+	} else if n > 1 {
+		sent = fmt.Sprintf("reminded %d times, last %s", n, dates[n-1])
+	}
+	if due {
+		return fmt.Sprintf("%s; reminder %d due: mavis invoice remind %s", sent, stage, inv.Number)
+	}
+	return fmt.Sprintf("%s; next from %s", sent, from)
 }

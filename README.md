@@ -359,6 +359,30 @@ the town before it as the city. Reverse-charged invoices carry category
 `AE` with your reverse charge wording as the reason. mavis writes the
 e-invoice; it does not send it. Sending goes through a Peppol access point.
 
+### Chasing
+
+```bash
+mavis invoice remind INV-2026-001          # draft it
+mavis invoice remind INV-2026-001 --sent   # once you have sent it
+```
+
+`remind` prints a subject and message for an overdue invoice, and the PDF
+to attach. It does not send anything. The wording follows the chase so far:
+a friendly first nudge, a second that mentions the first, and a final one
+asking for payment within 7 days. Each asks for what is still owed after
+any credit notes.
+
+`--sent` logs it against the client as an email, with the message kept in
+the entry, so the next reminder knows where things stand and `today` can
+say when another is due, 14 days after the last. Backdate one with
+`--date`, and the message is written as of that day.
+
+The final reminder can cite the Late Payment of Commercial Debts (Interest)
+Act 1998 and the fixed compensation it allows a UK business (£40, £70 or
+£100, depending on the debt). That is off unless you set
+`invoicing.statutory_notice: true`, because it changes the tone with a
+client and that is your call.
+
 Overdue invoices head `today`, and `stats` gains an invoices section once
 anything has been issued: issued and paid in the period, and what is unpaid
 now.
@@ -477,6 +501,7 @@ business:                     # you, as invoices name you
   peppol_id: 9932:GB123456789 # opts in to e-invoices
 invoicing:
   reverse_charge_note: 'Reverse charge: the customer is to account for any VAT due.'
+  statutory_notice: false     # cite the Late Payment Act in final reminders
 thresholds:
   active_quiet: 14
   warm_keep_in_touch: 30

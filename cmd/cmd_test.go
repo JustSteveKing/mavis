@@ -490,3 +490,70 @@ func TestRetainersFromTheCLI(t *testing.T) {
 		t.Fatalf("after drafting: %q", out)
 	}
 }
+
+func TestRemindersFromTheCLI(t *testing.T) {
+	setup(t)
+	cfg := os.Getenv("XDG_CONFIG_HOME") + "/mavis/config.yaml"
+	data, _ := os.ReadFile(cfg)
+	os.WriteFile(cfg, append(data, []byte("business:\n  name: Steve McDougall\n  address: [1 My Street]\n  vat_number: GB999999973\n")...), 0o644)
+	mustRun(t, "client", "add", "acme", "--name", "Acme Ltd", "--contact", "Jo Bloggs")
+	mustRun(t, "client", "set", "acme", "--address", "1 High Street")
+	mustRun(t, "invoice", "new", "acme", "--line", "Workshop=1000")
+	mustRun(t, "invoice", "issue", "acme", "--date", "2026-01-05")
+
+	if out := mustRun(t, "today"); !strings.Contains(out, "not chased yet; reminder 1 due: mavis invoice remind INV-2026-001") {
+		t.Fatalf("today before:\n%s", out)
+	}
+
+	out := mustRun(t, "invoice", "remind", "INV-2026-001")
+	for _, want := range []string{"Subject: Invoice INV-2026-001: a reminder", "Hi Jo,", "£1,200.00", "Thanks,\nSteve McDougall", "Attach: ", "INV-2026-001.pdf", "--sent"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("preview missing %q:\n%s", want, out)
+		}
+	}
+	// A preview logs nothing.
+	if out := mustRun(t, "client", "show", "acme"); strings.Contains(out, "Payment reminder") {
+		t.Fatal("a preview must not be logged")
+	}
+
+	out = mustRun(t, "invoice", "remind", "INV-2026-001", "--sent")
+	if !strings.HasPrefix(out, "Logged reminder 1 for INV-2026-001: log/") {
+		t.Fatalf("sent: %q", out)
+	}
+	if out := mustRun(t, "client", "show", "acme"); !strings.Contains(out, "Payment reminder 1 for INV-2026-001") {
+		t.Fatalf("not in the client's log:\n%s", out)
+	}
+	if out := mustRun(t, "today"); !strings.Contains(out, "reminded ") || !strings.Contains(out, "; next from ") {
+		t.Fatalf("today after:\n%s", out)
+	}
+	// The next one is the second, whenever it is sent.
+	if out := mustRun(t, "invoice", "remind", "INV-2026-001"); !strings.Contains(out, "second reminder") {
+		t.Fatalf("next:\n%s", out)
+	}
+}
+
+func TestABackdatedReminderIsTrueOnItsDay(t *testing.T) {
+	dir := setup(t)
+	cfg := os.Getenv("XDG_CONFIG_HOME") + "/mavis/config.yaml"
+	data, _ := os.ReadFile(cfg)
+	os.WriteFile(cfg, append(data, []byte("business:\n  name: Steve\n  address: [1 My Street]\n  vat_number: GB999999973\n")...), 0o644)
+	mustRun(t, "client", "add", "acme")
+	mustRun(t, "client", "set", "acme", "--address", "1 High Street")
+	mustRun(t, "invoice", "new", "acme", "--line", "Workshop=1000")
+	mustRun(t, "invoice", "issue", "acme", "--date", "2026-01-05") // due 2026-02-04
+
+	// As of the day after it fell due, it was 1 day overdue, whatever today is.
+	if out := mustRun(t, "invoice", "remind", "INV-2026-001", "--date", "2026-02-05"); !strings.Contains(out, "is now 1 day overdue") {
+		t.Fatalf("preview as of the date:\n%s", out)
+	}
+	out := mustRun(t, "invoice", "remind", "INV-2026-001", "--sent", "--date", "2026-02-05")
+	logged, err := os.ReadFile(dir + "/" + strings.TrimSpace(strings.TrimPrefix(out, "Logged reminder 1 for INV-2026-001: ")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"date: 2026-02-05T00:00", "Payment reminder 1 for INV-2026-001: 1,200.00 GBP, 1 day overdue.", "> A quick reminder that", "is now 1 day overdue"} {
+		if !strings.Contains(string(logged), want) {
+			t.Errorf("log entry missing %q:\n%s", want, logged)
+		}
+	}
+}
