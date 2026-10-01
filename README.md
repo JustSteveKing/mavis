@@ -46,8 +46,12 @@ From source, with Go 1.27 or later:
 
 ```bash
 git clone https://github.com/JustSteveKing/mavis.git
-cd mavis && go build -ldflags "-X main.version=$(git describe --tags --always)" -o mavis .
+cd mavis && make install
 ```
+
+To try it without touching anything of yours, `make sandbox` seeds a
+throwaway folder with sample clients, time, an invoice and a quote, using
+its own config, and prints the line to point your shell at it.
 
 ## Start
 

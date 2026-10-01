@@ -14,6 +14,8 @@ architecture, invariants and traps. Keep them apart.
 ## Commands
 
 ```bash
+make check                                  # exactly what CI runs
+make sandbox                                # seeded throwaway records to try things in
 go build ./... && go vet ./... && go test -race ./...
 gofmt -l .                                  # CI fails on any output
 

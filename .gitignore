@@ -5,3 +5,4 @@
 # Go
 *.test
 *.out
+/bin/
