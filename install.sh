@@ -324,7 +324,7 @@ install_release() {
 
 	if gh_ready; then
 		USED_GH=1
-		info "Downloading with the gh CLI, which works against a private fork too."
+		info "Downloading with the gh CLI, which can reach a private release."
 		gh release download "${TAG}" --repo "${GITHUB_REPO}" --pattern "${ARCHIVE}" --output "${archive}" --clobber
 	else
 		download "${archive}" "${URL}"
