@@ -27,12 +27,15 @@ type Thresholds struct {
 type Config struct {
 	Root       string     `yaml:"root"`
 	Thresholds Thresholds `yaml:"thresholds"`
+	// DayHours is the length of a working day, for converting between days
+	// and hours. 7.5 unless set.
+	DayHours float64 `yaml:"day_hours"`
 
 	path string
 }
 
 func defaults() Config {
-	return Config{Thresholds: Thresholds{ActiveQuiet: 14, WarmKeepInTouch: 30, WarmToCold: 60}}
+	return Config{Thresholds: Thresholds{ActiveQuiet: 14, WarmKeepInTouch: 30, WarmToCold: 60}, DayHours: 7.5}
 }
 
 // Path is where the config file lives: $XDG_CONFIG_HOME/mavis/config.yaml,
@@ -70,6 +73,9 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 
+	if c.DayHours <= 0 || c.DayHours > 24 {
+		c.DayHours = defaults().DayHours
+	}
 	d := defaults().Thresholds
 	if c.Thresholds.ActiveQuiet <= 0 {
 		c.Thresholds.ActiveQuiet = d.ActiveQuiet
@@ -82,6 +88,9 @@ func Load() (*Config, error) {
 	}
 	return &c, nil
 }
+
+// DayMinutes is the working day in whole minutes.
+func (c *Config) DayMinutes() int { return int(c.DayHours*60 + 0.5) }
 
 // ResolveRoot picks the records directory: the flag, then $MAVIS_ROOT, then
 // the config file. The result is absolute.

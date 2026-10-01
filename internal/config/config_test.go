@@ -15,6 +15,9 @@ func TestMissingFileGivesDefaults(t *testing.T) {
 	if c.Thresholds != (Thresholds{14, 30, 60}) {
 		t.Fatalf("thresholds = %+v", c.Thresholds)
 	}
+	if c.DayMinutes() != 450 {
+		t.Fatalf("day = %d minutes", c.DayMinutes())
+	}
 }
 
 func TestPartialThresholdsKeepDefaults(t *testing.T) {
@@ -73,5 +76,15 @@ func write(t *testing.T, path, content string) {
 	}
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestDayHours(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	write(t, filepath.Join(dir, "mavis", "config.yaml"), "day_hours: 8\n")
+	c, _ := Load()
+	if c.DayMinutes() != 480 {
+		t.Fatalf("day = %d", c.DayMinutes())
 	}
 }

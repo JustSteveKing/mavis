@@ -28,6 +28,7 @@ type Engagement struct {
 	Title   string `json:"title"`
 	Basis   string `json:"basis,omitempty"`
 	Rate    string `json:"rate,omitempty"`
+	Budget  string `json:"budget,omitempty"`
 	Start   string `json:"start,omitempty"`
 	End     string `json:"end,omitempty"`
 	Project string `json:"project,omitempty"`
@@ -37,7 +38,7 @@ type Engagement struct {
 // NewEngagement is what `engagement add` supplies. Name is the short part:
 // client acme and name reporting make the file acme-reporting.md.
 type NewEngagement struct {
-	Client, Name, Title, Status, Basis, Rate, Start, Project string
+	Client, Name, Title, Status, Basis, Rate, Budget, Start, Project string
 }
 
 func engagementFrom(path string, d *record.Document) Engagement {
@@ -48,6 +49,7 @@ func engagementFrom(path string, d *record.Document) Engagement {
 		Title:   d.Get("title"),
 		Basis:   d.Get("basis"),
 		Rate:    d.Get("rate"),
+		Budget:  d.Get("budget"),
 		Start:   d.Get("start"),
 		End:     d.Get("end"),
 		Project: linkTarget(d.Get("project")),
@@ -111,6 +113,13 @@ func (s *Store) AddEngagement(in NewEngagement) (Engagement, error) {
 		}
 		in.Rate = rate
 	}
+	if in.Budget != "" {
+		budget, err := money.Normalise(in.Budget)
+		if err != nil {
+			return Engagement{}, fmt.Errorf("budget: %w", err)
+		}
+		in.Budget = budget
+	}
 
 	var out Engagement
 	err := s.withLock(func() error {
@@ -150,6 +159,9 @@ func (s *Store) AddEngagement(in NewEngagement) (Engagement, error) {
 		}
 		if in.Rate != "" {
 			d.Set("rate", in.Rate)
+		}
+		if in.Budget != "" {
+			d.Set("budget", in.Budget)
 		}
 		if start != "" {
 			d.SetPlain("start", start)

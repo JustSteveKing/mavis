@@ -54,7 +54,8 @@ invoice.`,
 	f.StringVar(&in.Title, "title", "", "what the work is (default: the name)")
 	f.StringVar(&in.Status, "status", "active", "one of "+strings.Join(store.EngagementStatuses, ", "))
 	f.StringVar(&in.Basis, "basis", "", "one of "+strings.Join(store.Bases, ", "))
-	f.StringVar(&in.Rate, "rate", "", "rate per basis unit, e.g. 650")
+	f.StringVar(&in.Rate, "rate", "", "per day or hour; for a retainer, per month")
+	f.StringVar(&in.Budget, "budget", "", "the agreed price of fixed-price work, or a cap on the rest")
 	f.StringVar(&in.Start, "start", "", "start date, YYYY-MM-DD (default: today, if active)")
 	f.StringVar(&in.Project, "project", "", "the project note this work belongs to")
 	return cmd
@@ -150,6 +151,7 @@ func newEngagementShowCommand(a *app) *cobra.Command {
 				{"Client", e.Client},
 				{"Status", e.Status},
 				{"Basis", basis},
+				{"Budget", e.Budget},
 				{"Start", e.Start},
 				{"End", e.End},
 				{"Project", e.Project},

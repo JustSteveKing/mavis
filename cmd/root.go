@@ -34,7 +34,12 @@ func (a *app) openStore() (*store.Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return store.Open(root)
+	s, err := store.Open(root)
+	if err != nil {
+		return nil, err
+	}
+	s.DayMinutes = a.cfg.DayMinutes()
+	return s, nil
 }
 
 // emitJSON is the single place JSON output is produced, so every command's

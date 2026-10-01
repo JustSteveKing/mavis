@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/JustSteveKing/mavis/internal/duration"
 	"github.com/JustSteveKing/mavis/internal/record"
 	"github.com/gofrs/flock"
 )
@@ -41,6 +42,9 @@ type Store struct {
 
 	// Now is the clock. Tests replace it.
 	Now func() time.Time
+
+	// DayMinutes is a working day, for converting between days and hours.
+	DayMinutes int
 }
 
 // Open returns the store at root, which must already exist.
@@ -56,7 +60,7 @@ func Open(root string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Store{root: root, lock: flock.New(lockPath), Now: time.Now}, nil
+	return &Store{root: root, lock: flock.New(lockPath), Now: time.Now, DayMinutes: duration.DefaultDay}, nil
 }
 
 // lockFile lives in the user cache rather than the records directory, so a
