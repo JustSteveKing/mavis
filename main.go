@@ -1,6 +1,11 @@
 package main
 
-import "github.com/JustSteveKing/mavis/cmd"
+import (
+	"github.com/JustSteveKing/mavis/cmd"
+
+	// Before anything imports Bubble Tea: see the package doc.
+	_ "github.com/JustSteveKing/mavis/internal/termquiet"
+)
 
 // version is overridden at build time:
 //

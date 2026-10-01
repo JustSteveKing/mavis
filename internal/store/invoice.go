@@ -661,3 +661,20 @@ func (s *Store) AddCreditNote(query string, full bool, manual []ManualLine) (Inv
 	})
 	return out, err
 }
+
+// Quantity joins a line's quantity and unit for reading: "10 days",
+// "1 day", "2.75 hours". Only the units mavis writes itself (day, hour,
+// month) are pluralised; anything typed by hand is left as typed.
+func (l Line) Quantity() string {
+	unit := l.Unit
+	if unit == "" {
+		return l.Qty
+	}
+	if l.Qty != "1" {
+		switch unit {
+		case "day", "hour", "month":
+			unit += "s"
+		}
+	}
+	return l.Qty + " " + unit
+}

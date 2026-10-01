@@ -155,3 +155,11 @@ func TestNothingToBill(t *testing.T) {
 		t.Error("a month with nothing in it should fail")
 	}
 }
+
+func TestQuantityReadsAsEnglish(t *testing.T) {
+	for _, c := range [][3]string{{"1", "day", "1 day"}, {"10", "day", "10 days"}, {"2.75", "hour", "2.75 hours"}, {"3", "seats", "3 seats"}, {"2", "licence", "2 licence"}, {"4", "", "4"}} {
+		if got := (Line{Qty: c[0], Unit: c[1]}).Quantity(); got != c[2] {
+			t.Errorf("Quantity(%q, %q) = %q, want %q", c[0], c[1], got, c[2])
+		}
+	}
+}

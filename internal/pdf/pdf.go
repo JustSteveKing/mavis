@@ -235,7 +235,7 @@ func RenderDoc(doc Doc, o Options) ([]byte, error) {
 	for _, l := range doc.Lines {
 		m.AddAutoRow(
 			text.NewCol(5, l.Description, cell),
-			text.NewCol(2, quantity(l.Qty, l.Unit), cellR),
+			text.NewCol(2, l.Quantity(), cellR),
 			text.NewCol(2, l.Price.Display(), cellR),
 			text.NewCol(1, vat(l.VAT), cellR),
 			text.NewCol(2, l.Amount.Display(), cellR),
@@ -371,20 +371,4 @@ func Name(number, slug string) string {
 		return number + ".pdf"
 	}
 	return slug + ".pdf"
-}
-
-// quantity joins a quantity and its unit for reading: "10 days", "1 day",
-// "2.75 hours". Only the units mavis writes itself are pluralised; anything
-// typed by hand is left as typed.
-func quantity(qty, unit string) string {
-	if unit == "" {
-		return qty
-	}
-	if qty != "1" {
-		switch unit {
-		case "day", "hour", "month":
-			unit += "s"
-		}
-	}
-	return qty + " " + unit
 }

@@ -444,6 +444,24 @@ whichever is later. Moving a client is a fresh decision, so it resets the
 clock. Cold clients never appear; `mavis client list --status cold` is there
 for when you mean to work through them.
 
+## The TUI
+
+```bash
+mavis tui
+```
+
+Today, clients, invoices and quotes on one screen, with a detail pane that
+follows the cursor: a client's engagements, follow-ups and recent calls, or
+an invoice's lines, totals and how far it has been chased. It re-reads the
+files every two seconds, so a call an agent logs, or a note you add in
+Obsidian, appears on its own. It never reloads while you are typing.
+
+From it you can tick off follow-ups (`x`), add a note to a client (`n`),
+mark an invoice paid (`p`, after a y/n) and preview the next reminder
+(`r`). Issuing, sending and recording reminders as sent stay at the CLI.
+`?` lists the keys, and the footer only offers the ones that do something
+for what is selected.
+
 ## Agents
 
 mavis runs as an MCP server, so an agent such as Claude can keep your

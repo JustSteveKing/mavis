@@ -196,6 +196,25 @@ taskgo found (a custom MarshalJSON on a numeric type). The stdio runner
 returns nil on a client disconnect, as taskgo's does, for the same reason.
 `instructions.go` is what every connecting agent is told; keep it short.
 
+**`internal/tui` follows taskgo's TUI**: lazygit-style panels, the 16
+ANSI colours, a reload every two seconds that never fires while typing or
+confirming (`TestAgentChangesAppearOnTheTickButNotWhileTyping`). It acts as
+the human, so it may mark invoices paid, always behind a y/n. The cursor is
+shown by a `›` marker as well as colour, so it survives a monochrome
+terminal. `TestFrameFitsTheTerminal` renders at three sizes and fails on any
+line wider than the terminal or a frame of the wrong height; the footer is
+truncated rather than wrapped for that reason.
+
+**`internal/termquiet` exists because Bubble Tea v1 queries the terminal's
+background colour in its package `init`**, so every mavis command, not just
+the TUI, would wait out a five-second timeout on a terminal that never
+answers. termquiet declares the background first, relying on Go's specified
+package initialisation order (imports first, then import path, and
+`JustSteveKing` sorts before `charmbracelet`). `main.go` imports it for that
+alone. `TestNoBackgroundQuery` in package main runs the built binary in a
+pty (creack/pty, test-only) and fails if the query goes out or startup takes
+seconds; removing the import makes it fail at 4s. Measured: 5.03s to 0.02s.
+
 **Invoice numbers are derived** from existing files (`nextNumber`), per year
 of the issue date, under the store lock. There is no counter. A gap would
 need a deleted issued invoice, and issued invoices cannot be discarded.

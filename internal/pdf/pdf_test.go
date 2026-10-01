@@ -97,11 +97,3 @@ func TestQuoteShowsScopeAndValidity(t *testing.T) {
 		t.Error("a quote is not a bill")
 	}
 }
-
-func TestQuantityReadsAsEnglish(t *testing.T) {
-	for _, c := range [][3]string{{"1", "day", "1 day"}, {"10", "day", "10 days"}, {"2.75", "hour", "2.75 hours"}, {"3", "seats", "3 seats"}, {"2", "licence", "2 licence"}, {"4", "", "4"}} {
-		if got := quantity(c[0], c[1]); got != c[2] {
-			t.Errorf("quantity(%q, %q) = %q, want %q", c[0], c[1], got, c[2])
-		}
-	}
-}

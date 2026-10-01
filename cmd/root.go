@@ -103,6 +103,7 @@ Every record is a file you can open, grep, diff and edit by hand.`,
 		newInvoiceCommand(a),
 		newQuoteCommand(a),
 		newMCPCommand(a, version),
+		newTUICommand(a),
 	)
 	return root
 }
