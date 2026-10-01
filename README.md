@@ -32,7 +32,7 @@ and knew exactly who still owed you.
 
 mavis is early. What exists today is the client side (clients, engagements,
 the log of calls and notes, follow-ups, `today`), time tracking, stats, and
-invoices from draft to PDF to paid. Credit notes come next. Time and invoicing are both optional: if you only want
+invoices from draft to PDF to paid, with credit notes to correct them. Time and invoicing are both optional: if you only want
 somewhere to keep track of clients, you never have to meet either.
 
 ## Install
@@ -245,6 +245,26 @@ they said. After that an invoice does not change, except to be marked paid;
 invoice's lines are edited by hand, mavis notices that they no longer add up
 to the totals it was issued with and refuses to read it, because the
 correction for an issued invoice is a credit note.
+
+### Credit notes
+
+```bash
+mavis invoice credit INV-2026-001 --full
+mavis invoice credit INV-2026-001 --line "Disputed day=1 x 650 day"
+mavis invoice issue draft-credit-inv-2026-001
+```
+
+A credit note is drafted against an issued invoice, either every line of it
+or the part you give, and issued like an invoice in its own series,
+`CN-2026-001`. It can never take more than is left on the invoice; that is
+checked when it is drafted and again when it is issued, so two drafts that
+each fit cannot add up to too much.
+
+An invoice's balance is its total less its issued credit notes, and that
+balance is what `today`, `invoice list` and the unpaid totals in `stats`
+use. A fully credited invoice shows as `credited` and stops covering its
+month, so you can bill that month again correctly. A part-credited one still
+covers it.
 
 Issuing also writes the PDF, to `.invoices/INV-2026-001.pdf` under your
 records directory. The folder is dot-prefixed so Obsidian leaves the

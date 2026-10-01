@@ -126,6 +126,17 @@ so they need no PDF tooling in CI. The `cmd` layer writes the PDF after
 `IssueInvoice` returns, because the store cannot import `pdf` (which imports
 the store); a failed PDF leaves the invoice issued and says how to retry.
 
+**Credit notes are invoices with `kind: credit`** and `credits: [[INV-...]]`.
+They share the file format, the lines table and `IssueInvoice`; `prefix`
+gives them their own `CN` series. `settle` derives each invoice's
+`Credited` and `Balance` from issued credit notes every time invoices are
+listed; neither is stored. Anything asking "what is owed" must use
+`Balance`, never `Total`. Over-crediting is checked at draft and again at
+issue, because two drafts can each fit and together not. A fully credited
+invoice (`FullyCredited`) no longer covers its month for `linesForMonth`
+and `InvoiceCovering`, which is what lets the month be re-billed. A credit
+note has no due date and cannot be paid.
+
 **Invoice numbers are derived** from existing files (`nextNumber`), per year
 of the issue date, under the store lock. There is no counter. A gap would
 need a deleted issued invoice, and issued invoices cannot be discarded.

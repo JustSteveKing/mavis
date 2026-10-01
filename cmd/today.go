@@ -62,7 +62,7 @@ mavis suggests moves; it never makes them. Cold clients are never shown.`,
 			if len(t.Unpaid) > 0 {
 				w := section("Overdue invoices")
 				for _, inv := range t.Unpaid {
-					fmt.Fprintf(w, "  %s\t%s · %s %s · due %s (%s)\n", inv.Number, inv.Client, inv.Total.Display(), inv.Currency, inv.Due, ago(inv.Due, t.Date))
+					fmt.Fprintf(w, "  %s\t%s · %s %s owed · due %s (%s)\n", inv.Number, inv.Client, inv.Balance.Display(), inv.Currency, inv.Due, ago(inv.Due, t.Date))
 				}
 				w.Flush()
 			}

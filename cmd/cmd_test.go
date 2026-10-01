@@ -359,3 +359,30 @@ func TestIssueAndPay(t *testing.T) {
 		t.Fatal("an issued invoice cannot be edited")
 	}
 }
+
+func TestCreditNoteFromTheCLI(t *testing.T) {
+	setup(t)
+	cfg := os.Getenv("XDG_CONFIG_HOME") + "/mavis/config.yaml"
+	data, _ := os.ReadFile(cfg)
+	os.WriteFile(cfg, append(data, []byte("business:\n  name: Steve Ltd\n  address: [1 My Street]\n  vat_number: GB999999973\n")...), 0o644)
+	mustRun(t, "client", "add", "acme", "--name", "Acme Ltd")
+	mustRun(t, "client", "set", "acme", "--address", "1 High Street")
+	mustRun(t, "invoice", "new", "acme", "--line", "Workshop=1000")
+	mustRun(t, "invoice", "issue", "acme", "--date", "2026-10-01")
+
+	out := mustRun(t, "invoice", "credit", "INV-2026-001", "--line", "Discount=250")
+	if !strings.Contains(out, "Drafted draft-credit-inv-2026-001 against INV-2026-001") || !strings.Contains(out, "mavis invoice issue draft-credit-inv-2026-001") {
+		t.Fatalf("credit:\n%s", out)
+	}
+	out = mustRun(t, "invoice", "issue", "draft-credit")
+	if !strings.HasPrefix(out, "Issued CN-2026-001 to Acme Ltd, crediting INV-2026-001: 300.00 GBP") {
+		t.Fatalf("issue credit: %q", out)
+	}
+	out = mustRun(t, "invoice", "list")
+	if !regexp.MustCompile(`INV-2026-001\s+issued.*1,200.00 GBP\s+900.00`).MatchString(out) || !strings.Contains(out, "CN-2026-001 (INV-2026-001)") {
+		t.Fatalf("list:\n%s", out)
+	}
+	if out := mustRun(t, "invoice", "show", "INV-2026-001"); !strings.Contains(out, "Credited 300.00; 900.00 still owed") {
+		t.Fatalf("show:\n%s", out)
+	}
+}

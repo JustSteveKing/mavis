@@ -41,6 +41,8 @@ type VATLine struct {
 type Invoice struct {
 	Slug         string   `json:"slug"`
 	Number       string   `json:"number,omitempty"`
+	Kind         string   `json:"kind"`              // invoice or credit
+	Credits      string   `json:"credits,omitempty"` // for a credit note, the invoice it corrects
 	Status       string   `json:"status"`
 	Client       string   `json:"client"`
 	Currency     string   `json:"currency"`
@@ -67,7 +69,26 @@ type Invoice struct {
 	VAT      money.Pence `json:"vat"`
 	Total    money.Pence `json:"total"`
 
+	// Derived from issued credit notes, never stored. Balance is what is
+	// still owed: nothing for a draft, a paid invoice or a credit note.
+	Credited money.Pence `json:"credited"`
+	Balance  money.Pence `json:"balance"`
+
 	Path string `json:"path"`
+}
+
+// FullyCredited reports an issued invoice whose credit notes cancel it.
+func (inv Invoice) FullyCredited() bool {
+	return inv.Kind == "invoice" && inv.Status != "draft" && inv.Credited >= inv.Total
+}
+
+// Display is the status to show: an issued invoice credited to nothing reads
+// as credited.
+func (inv Invoice) Display() string {
+	if inv.Status == "issued" && inv.FullyCredited() {
+		return "credited"
+	}
+	return inv.Status
 }
 
 const linesHeader = "| Description | Qty | Unit | Price | VAT | Amount |\n|-------------|-----|------|-------|-----|--------|\n"
@@ -190,6 +211,8 @@ func invoiceFrom(path string, d *record.Document) (Invoice, error) {
 	inv := Invoice{
 		Slug:         strings.TrimSuffix(filepath.Base(path), ".md"),
 		Number:       d.Get("number"),
+		Kind:         d.Get("kind"),
+		Credits:      linkTarget(d.Get("credits")),
 		Status:       d.Get("status"),
 		Client:       linkTarget(d.Get("client")),
 		Currency:     d.Get("currency"),
@@ -217,6 +240,9 @@ func invoiceFrom(path string, d *record.Document) (Invoice, error) {
 	}
 	if inv.Currency == "" {
 		inv.Currency = "GBP"
+	}
+	if inv.Kind == "" {
+		inv.Kind = "invoice"
 	}
 	if inv.VATTreatment == "" {
 		inv.VATTreatment = "standard"
@@ -267,6 +293,7 @@ func (s *Store) Invoices() ([]Invoice, []Problem, error) {
 		}
 		out = append(out, inv)
 	}
+	settle(out)
 	slices.SortStableFunc(out, func(a, b Invoice) int {
 		switch {
 		case a.Number == "" && b.Number != "":
@@ -426,7 +453,7 @@ func (s *Store) linesForMonth(client Client, month, label string, vat int) ([]Li
 	}
 	billed := map[string]string{}
 	for _, inv := range invoices {
-		if inv.Period == month {
+		if inv.Period == month && !inv.FullyCredited() {
 			for _, e := range inv.Engagements {
 				billed[e] = inv.Slug
 				if inv.Number != "" {
@@ -502,7 +529,7 @@ func (s *Store) InvoiceCovering(engagement, month string) (string, error) {
 		return "", err
 	}
 	for _, inv := range invoices {
-		if inv.Period == month && slices.Contains(inv.Engagements, engagement) {
+		if inv.Period == month && !inv.FullyCredited() && slices.Contains(inv.Engagements, engagement) {
 			if inv.Number != "" {
 				return inv.Number, nil
 			}
@@ -526,6 +553,98 @@ func (s *Store) DiscardDraft(query string) (Invoice, error) {
 		}
 		out = inv
 		return os.Remove(inv.Path)
+	})
+	return out, err
+}
+
+// settle works out each invoice's credits and balance from the issued credit
+// notes that reference it.
+func settle(all []Invoice) {
+	credited := map[string]money.Pence{}
+	for _, inv := range all {
+		if inv.Kind == "credit" && inv.Status != "draft" {
+			credited[inv.Credits] += inv.Total
+		}
+	}
+	for i := range all {
+		inv := &all[i]
+		if inv.Kind != "invoice" {
+			continue
+		}
+		inv.Credited = credited[inv.Number]
+		if inv.Status == "issued" && inv.Total > inv.Credited {
+			inv.Balance = inv.Total - inv.Credited
+		}
+	}
+}
+
+// AddCreditNote drafts a credit note against an issued invoice: every line
+// with full, or the lines given. It cannot credit more than is left.
+func (s *Store) AddCreditNote(query string, full bool, manual []ManualLine) (Invoice, error) {
+	if full == (len(manual) > 0) {
+		return Invoice{}, errors.New("give --full to credit the whole invoice, or --line for part of it, not both")
+	}
+	var out Invoice
+	err := s.withLock(func() error {
+		inv, err := s.ResolveInvoice(query)
+		if err != nil {
+			return err
+		}
+		if inv.Kind != "invoice" || inv.Status == "draft" {
+			return fmt.Errorf("%s is not an issued invoice; only those take a credit note", query)
+		}
+		remaining := inv.Total - inv.Credited
+		if remaining <= 0 {
+			return fmt.Errorf("%s is already credited in full", inv.Number)
+		}
+
+		vat := defaultVATFor(inv.VATTreatment)
+		var lines []Line
+		if full {
+			if inv.Credited > 0 {
+				return fmt.Errorf("%s is already partly credited (%s); credit the rest with --line", inv.Number, inv.Credited.Display())
+			}
+			lines = append(lines, inv.Lines...)
+		}
+		for _, m := range manual {
+			qty := m.Qty
+			if qty == "" {
+				qty = "1"
+			}
+			q, err := money.Parse(qty)
+			if err != nil || q <= 0 {
+				return fmt.Errorf("line %q: quantity %q is not a number above zero", m.Description, qty)
+			}
+			price, err := money.Parse(m.Price)
+			if err != nil || price <= 0 {
+				return fmt.Errorf("line %q: price %q is not an amount above zero", m.Description, m.Price)
+			}
+			lines = append(lines, Line{Description: m.Description, Qty: trimQty(q), Unit: m.Unit, Price: price, VAT: vat, Amount: price.MulDiv(int64(q), 100)})
+		}
+		_, net, tax := totals(lines)
+		if net+tax > remaining {
+			return fmt.Errorf("that credits %s, but only %s is left on %s", (net + tax).Display(), remaining.Display(), inv.Number)
+		}
+
+		path, err := freePath(filepath.Join(s.root, InvoicesDir), "draft-credit-"+strings.ToLower(inv.Number))
+		if err != nil {
+			return err
+		}
+		d := record.New()
+		d.Set("type", "invoice")
+		d.Set("kind", "credit")
+		d.Set("status", "draft")
+		d.Set("credits", link(inv.Number))
+		d.Set("client", link(inv.Client))
+		d.Set("currency", inv.Currency)
+		d.Set("vat_treatment", inv.VATTreatment)
+		d.SetPlain("created", s.today())
+		d.Body = renderLines(lines)
+		if err := write(path, d); err != nil {
+			return err
+		}
+		out, err = invoiceFrom(path, d)
+		return err
 	})
 	return out, err
 }

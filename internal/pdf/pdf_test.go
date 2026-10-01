@@ -60,3 +60,17 @@ func TestReverseChargeNoteIsPrinted(t *testing.T) {
 		t.Fatal("missing the VAT note")
 	}
 }
+
+func TestCreditNoteSaysWhatItCredits(t *testing.T) {
+	inv := sample("issued")
+	inv.Kind, inv.Number, inv.Credits, inv.Due = "credit", "CN-2026-001", "INV-2026-001", ""
+	data, _ := Render(inv, Options{Uncompressed: true})
+	for _, want := range []string{"CREDIT NOTE", "CN-2026-001, crediting invoice INV-2026-001", "reduces the amount owed on invoice INV-2026-001"} {
+		if !bytes.Contains(data, []byte(want)) {
+			t.Errorf("missing %q", want)
+		}
+	}
+	if bytes.Contains(data, []byte("Payment is due")) {
+		t.Error("a credit note asks for no payment")
+	}
+}

@@ -86,6 +86,7 @@ type InvoiceTotal struct {
 // absent, not zero, until something has been issued.
 type Invoicing struct {
 	Invoiced    []InvoiceTotal `json:"invoiced"`    // issued in the period
+	Credited    []InvoiceTotal `json:"credited"`    // credit notes issued in the period
 	Paid        []InvoiceTotal `json:"paid"`        // paid in the period
 	Outstanding []InvoiceTotal `json:"outstanding"` // unpaid now, whenever issued
 	Overdue     []InvoiceTotal `json:"overdue"`     // unpaid now and past due
@@ -287,7 +288,7 @@ func (s *Store) invoicing(p Period) (*Invoicing, []Problem, error) {
 		return nil, nil, err
 	}
 	today := s.today()
-	invoiced, paid, outstanding, overdue := map[string]*InvoiceTotal{}, map[string]*InvoiceTotal{}, map[string]*InvoiceTotal{}, map[string]*InvoiceTotal{}
+	invoiced, credited, paid, outstanding, overdue := map[string]*InvoiceTotal{}, map[string]*InvoiceTotal{}, map[string]*InvoiceTotal{}, map[string]*InvoiceTotal{}, map[string]*InvoiceTotal{}
 	add := func(m map[string]*InvoiceTotal, inv Invoice) {
 		t := m[inv.Currency]
 		if t == nil {
@@ -305,16 +306,24 @@ func (s *Store) invoicing(p Period) (*Invoicing, []Problem, error) {
 			continue
 		}
 		any = true
+		if inv.Kind == "credit" {
+			if p.contains(inv.Issued) {
+				add(credited, inv)
+			}
+			continue
+		}
 		if p.contains(inv.Issued) {
 			add(invoiced, inv)
 		}
 		if inv.Status == "paid" && p.contains(inv.Paid) {
 			add(paid, inv)
 		}
-		if inv.Status == "issued" {
-			add(outstanding, inv)
+		if inv.Balance > 0 {
+			owed := inv
+			owed.Total, owed.Net, owed.VAT = inv.Balance, 0, 0
+			add(outstanding, owed)
 			if inv.Due < today {
-				add(overdue, inv)
+				add(overdue, owed)
 			}
 		}
 	}
@@ -328,5 +337,5 @@ func (s *Store) invoicing(p Period) (*Invoicing, []Problem, error) {
 		}
 		return out
 	}
-	return &Invoicing{Invoiced: list(invoiced), Paid: list(paid), Outstanding: list(outstanding), Overdue: list(overdue)}, problems, nil
+	return &Invoicing{Invoiced: list(invoiced), Credited: list(credited), Paid: list(paid), Outstanding: list(outstanding), Overdue: list(overdue)}, problems, nil
 }

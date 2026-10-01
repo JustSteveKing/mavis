@@ -26,6 +26,7 @@ func newInvoiceCommand(a *app) *cobra.Command {
 		newInvoiceDiscardCommand(a),
 		newInvoiceIssueCommand(a),
 		newInvoicePDFCommand(a),
+		newInvoiceCreditCommand(a),
 		newInvoicePaidCommand(a, true),
 		newInvoicePaidCommand(a, false),
 	)
@@ -154,20 +155,29 @@ func newInvoiceListCommand(a *app) *cobra.Command {
 				a.printf("No invoices.\n")
 				return nil
 			}
-			rows := [][]string{{"INVOICE", "STATUS", "CLIENT", "PERIOD", "ISSUED", "DUE", "TOTAL"}}
+			rows := [][]string{{"INVOICE", "STATUS", "CLIENT", "PERIOD", "ISSUED", "DUE", "TOTAL", "OWED"}}
 			for _, inv := range shown {
 				name := inv.Number
 				if name == "" {
 					name = inv.Slug
 				}
-				rows = append(rows, []string{name, inv.Status, inv.Client, inv.Period, inv.Issued, inv.Due, inv.Total.Display() + " " + inv.Currency})
+				total := inv.Total.Display() + " " + inv.Currency
+				owed := ""
+				if inv.Kind == "credit" {
+					total = "-" + total
+					name += " (" + inv.Credits + ")"
+				} else if inv.Balance > 0 {
+					owed = inv.Balance.Display()
+				}
+				rows = append(rows, []string{name, inv.Display(), inv.Client, inv.Period, inv.Issued, inv.Due, total, owed})
 			}
-			table(a.out, "", map[int]bool{6: true}, rows)
+			table(a.out, "", map[int]bool{6: true, 7: true}, rows)
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&client, "client", "", "only this client's")
 	cmd.Flags().StringVar(&status, "status", "", "only invoices with this status: "+strings.Join(store.InvoiceStatuses, ", "))
+	_ = cmd.RegisterFlagCompletionFunc("status", cobra.FixedCompletions(store.InvoiceStatuses, cobra.ShellCompDirectiveNoFileComp))
 	return cmd
 }
 
@@ -192,7 +202,10 @@ func newInvoiceShowCommand(a *app) *cobra.Command {
 			if title == "" {
 				title = "Draft " + inv.Slug
 			}
-			a.printf("%s, %s, %s\n", title, inv.Client, inv.Status)
+			if inv.Kind == "credit" {
+				title = "Credit note " + strings.TrimPrefix(title, "Draft ") + " against " + inv.Credits
+			}
+			a.printf("%s, %s, %s\n", title, inv.Client, inv.Display())
 			var facts []string
 			if inv.Period != "" {
 				if t, err := time.Parse("2006-01", inv.Period); err == nil {
@@ -211,6 +224,9 @@ func newInvoiceShowCommand(a *app) *cobra.Command {
 			}
 			a.printf("%s\n\n", strings.Join(facts, " · "))
 			a.invoiceBody(inv)
+			if inv.Credited > 0 {
+				a.printf("\n  Credited %s; %s still owed\n", inv.Credited.Display(), inv.Balance.Display())
+			}
 			return nil
 		},
 	}
@@ -338,7 +354,11 @@ apart from being marked paid; mistakes are corrected with a credit note.`,
 					PDF string `json:"pdf,omitempty"`
 				}{inv, path})
 			}
-			a.printf("Issued %s to %s: %s %s, due %s\n", inv.Number, inv.ToName, inv.Total.Display(), inv.Currency, inv.Due)
+			if inv.Kind == "credit" {
+				a.printf("Issued %s to %s, crediting %s: %s %s\n", inv.Number, inv.ToName, inv.Credits, inv.Total.Display(), inv.Currency)
+			} else {
+				a.printf("Issued %s to %s: %s %s, due %s\n", inv.Number, inv.ToName, inv.Total.Display(), inv.Currency, inv.Due)
+			}
 			if pdfErr != nil {
 				return fmt.Errorf("%s is issued, but its PDF failed: %w; try mavis invoice pdf %s", inv.Number, pdfErr, inv.Number)
 			}
@@ -430,5 +450,55 @@ comes out the same however the config or the client has changed since.`,
 		},
 	}
 	cmd.Flags().StringVarP(&out, "out", "o", "", "write here instead")
+	return cmd
+}
+
+func newInvoiceCreditCommand(a *app) *cobra.Command {
+	var full bool
+	var lines []string
+	cmd := &cobra.Command{
+		Use:   "credit <invoice>",
+		Short: "Draft a credit note against an issued invoice",
+		Long: `Issued invoices never change. To correct one, draft a credit note against
+it: --full credits every line, --line credits part of it. Issue the credit
+note like an invoice; it is numbered in its own series, CN-2026-001.
+
+A credit note can never take more than is left on the invoice, checked when
+it is drafted and again when it is issued. An invoice's balance, what is
+still owed, is its total less its issued credit notes.
+
+A fully credited invoice stops covering its month, so the month can be
+billed again, correctly. A part-credited one still covers it.`,
+		Example: `  mavis invoice credit INV-2026-001 --full
+  mavis invoice credit INV-2026-001 --line "Disputed day=1 x 650 day"`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			s, err := a.openStore()
+			if err != nil {
+				return err
+			}
+			var manual []store.ManualLine
+			for _, l := range lines {
+				ml, err := parseLineFlag(l)
+				if err != nil {
+					return err
+				}
+				manual = append(manual, ml)
+			}
+			cn, err := s.AddCreditNote(args[0], full, manual)
+			if err != nil {
+				return err
+			}
+			if a.jsonOut {
+				return a.emitJSON(cn)
+			}
+			a.printf("Drafted %s against %s\n\n", cn.Slug, cn.Credits)
+			a.invoiceBody(cn)
+			a.printf("\nIssue it with: mavis invoice issue %s\n", cn.Slug)
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&full, "full", false, "credit every line of the invoice")
+	cmd.Flags().StringArrayVar(&lines, "line", nil, `credit part: "description=price" or "description=qty x price unit"; repeatable`)
 	return cmd
 }

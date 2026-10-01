@@ -52,8 +52,14 @@ func Render(inv store.Invoice, o Options) ([]byte, error) {
 	m := maroto.New(b.Build())
 
 	title, ref := "INVOICE", inv.Number
+	if inv.Kind == "credit" {
+		title, ref = "CREDIT NOTE", inv.Number+", crediting invoice "+inv.Credits
+	}
 	if inv.Status == "draft" {
-		title, ref = "DRAFT INVOICE", "not yet issued"
+		title, ref = "DRAFT "+title, "not yet issued"
+		if inv.Kind == "credit" {
+			ref += ", crediting invoice " + inv.Credits
+		}
 	}
 
 	// Who it is from, top right; what it is, top left.
@@ -175,7 +181,9 @@ func Render(inv store.Invoice, o Options) ([]byte, error) {
 	if inv.VATNote != "" {
 		notes = append(notes, inv.VATNote)
 	}
-	if inv.Due != "" {
+	if inv.Kind == "credit" {
+		notes = append(notes, "This credit note reduces the amount owed on invoice "+inv.Credits+".")
+	} else if inv.Due != "" {
 		notes = append(notes, "Payment is due by "+long(inv.Due)+".")
 	}
 	if len(notes) > 0 {

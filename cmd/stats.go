@@ -113,6 +113,9 @@ Amounts in different currencies are totalled separately.`,
 					}
 				}
 				add("Issued", inv.Invoiced, true)
+				if len(inv.Credited) > 0 {
+					add("Credited", inv.Credited, true)
+				}
 				add("Paid", inv.Paid, false)
 				add("Unpaid now", inv.Outstanding, false)
 				if len(inv.Overdue) > 0 {

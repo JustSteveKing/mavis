@@ -64,7 +64,7 @@ func (s *Store) Today(q Quiet) (Today, []Problem, error) {
 	}
 	problems = append(problems, p...)
 	for _, inv := range invoices {
-		if inv.Status == "issued" && inv.Due != "" && inv.Due < today {
+		if inv.Balance > 0 && inv.Due != "" && inv.Due < today {
 			t.Unpaid = append(t.Unpaid, inv)
 		}
 	}
