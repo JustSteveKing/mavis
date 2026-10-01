@@ -32,7 +32,8 @@ and knew exactly who still owed you.
 
 mavis is early. What exists today is the client side (clients, engagements,
 the log of calls and notes, follow-ups, `today`), time tracking, stats, and
-invoice drafts. Issuing invoices, and the PDF, come next. Time and invoicing are both optional: if you only want
+invoices from draft to paid. A PDF of each invoice, and credit notes, come
+next. Time and invoicing are both optional: if you only want
 somewhere to keep track of clients, you never have to meet either.
 
 ## Install
@@ -221,8 +222,34 @@ VAT follows the client. A client in the UK, or with no country set, is
 charged 20%. Anywhere else is reverse charged at 0%. `client set
 --vat-treatment` overrides either way.
 
-Nothing is numbered until an invoice is issued, and `invoice issue` is the
-next thing to be built. Address and VAT details are only checked then.
+### Issuing
+
+```bash
+mavis invoice issue acme-2026-10
+mavis invoice paid INV-2026-001 --date 2026-11-20
+```
+
+`issue` gives a draft the next number for its year (`INV-2026-001`, then
+`INV-2026-002`, and from January `INV-2027-001`), stamps the issue date, tax
+point and due date from the client's terms, and renames the file to its
+number. Numbers come from the invoices that exist, so there is no counter to
+drift out of step with them.
+
+It checks everything a VAT invoice has to show before it numbers anything:
+your name, address and VAT number from the config, and the client's address.
+Whatever is missing is listed together, with how to fill each one in.
+
+Your details and the client's are copied into the issued invoice. Move house
+or let a client rename themselves, and last year's invoices still say what
+they said. After that an invoice does not change, except to be marked paid;
+`invoice unpaid` takes back a paid mark made by mistake. If an issued
+invoice's lines are edited by hand, mavis notices that they no longer add up
+to the totals it was issued with and refuses to read it, because the
+correction for an issued invoice is a credit note.
+
+Overdue invoices head `today`, and `stats` gains an invoices section once
+anything has been issued: issued and paid in the period, and what is unpaid
+now.
 
 ## Stats
 

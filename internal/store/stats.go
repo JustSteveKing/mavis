@@ -73,12 +73,31 @@ type Total struct {
 	PerDay   *money.Pence `json:"per_day,omitempty"`
 }
 
+// InvoiceTotal sums invoices in one currency.
+type InvoiceTotal struct {
+	Currency string      `json:"currency"`
+	Count    int         `json:"count"`
+	Net      money.Pence `json:"net"`
+	VAT      money.Pence `json:"vat"`
+	Total    money.Pence `json:"total"`
+}
+
+// Invoicing is what invoices say, as opposed to what time is worth. It is
+// absent, not zero, until something has been issued.
+type Invoicing struct {
+	Invoiced    []InvoiceTotal `json:"invoiced"`    // issued in the period
+	Paid        []InvoiceTotal `json:"paid"`        // paid in the period
+	Outstanding []InvoiceTotal `json:"outstanding"` // unpaid now, whenever issued
+	Overdue     []InvoiceTotal `json:"overdue"`     // unpaid now and past due
+}
+
 type Stats struct {
 	Period      Period           `json:"period"`
 	Minutes     int              `json:"minutes"`
 	Engagements []EngagementStat `json:"engagements"`
 	Totals      []Total          `json:"totals"`
 	Fixed       []FixedStat      `json:"fixed"`
+	Invoicing   *Invoicing       `json:"invoicing,omitempty"`
 }
 
 // Stats works out time and its value for a period.
@@ -210,6 +229,13 @@ func (s *Store) Stats(p Period) (Stats, []Problem, error) {
 		}
 		return strings.Compare(a.Engagement, b.Engagement)
 	})
+	inv, pr, err := s.invoicing(p)
+	if err != nil {
+		return out, nil, err
+	}
+	problems = append(problems, pr...)
+	out.Invoicing = inv
+
 	for _, cur := range sortedKeys(totals) {
 		t := totals[cur]
 		if m := valuedMinutes[cur]; m > 0 {
@@ -253,4 +279,54 @@ func sortedKeys[V any](m map[string]V) []string {
 	}
 	slices.Sort(keys)
 	return keys
+}
+
+func (s *Store) invoicing(p Period) (*Invoicing, []Problem, error) {
+	invoices, problems, err := s.Invoices()
+	if err != nil {
+		return nil, nil, err
+	}
+	today := s.today()
+	invoiced, paid, outstanding, overdue := map[string]*InvoiceTotal{}, map[string]*InvoiceTotal{}, map[string]*InvoiceTotal{}, map[string]*InvoiceTotal{}
+	add := func(m map[string]*InvoiceTotal, inv Invoice) {
+		t := m[inv.Currency]
+		if t == nil {
+			t = &InvoiceTotal{Currency: inv.Currency}
+			m[inv.Currency] = t
+		}
+		t.Count++
+		t.Net += inv.Net
+		t.VAT += inv.VAT
+		t.Total += inv.Total
+	}
+	any := false
+	for _, inv := range invoices {
+		if inv.Status == "draft" {
+			continue
+		}
+		any = true
+		if p.contains(inv.Issued) {
+			add(invoiced, inv)
+		}
+		if inv.Status == "paid" && p.contains(inv.Paid) {
+			add(paid, inv)
+		}
+		if inv.Status == "issued" {
+			add(outstanding, inv)
+			if inv.Due < today {
+				add(overdue, inv)
+			}
+		}
+	}
+	if !any {
+		return nil, problems, nil
+	}
+	list := func(m map[string]*InvoiceTotal) []InvoiceTotal {
+		out := []InvoiceTotal{}
+		for _, k := range sortedKeys(m) {
+			out = append(out, *m[k])
+		}
+		return out
+	}
+	return &Invoicing{Invoiced: list(invoiced), Paid: list(paid), Outstanding: list(outstanding), Overdue: list(overdue)}, problems, nil
 }

@@ -59,6 +59,13 @@ mavis suggests moves; it never makes them. Cold clients are never shown.`,
 				}
 				w.Flush()
 			}
+			if len(t.Unpaid) > 0 {
+				w := section("Overdue invoices")
+				for _, inv := range t.Unpaid {
+					fmt.Fprintf(w, "  %s\t%s · %s %s · due %s (%s)\n", inv.Number, inv.Client, inv.Total.Display(), inv.Currency, inv.Due, ago(inv.Due, t.Date))
+				}
+				w.Flush()
+			}
 			if len(t.ThisWeek) > 0 {
 				w := section("Due this week")
 				for _, f := range t.ThisWeek {

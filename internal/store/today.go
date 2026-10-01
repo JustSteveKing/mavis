@@ -28,6 +28,7 @@ type Nudge struct {
 type Today struct {
 	Date        string       `json:"date"`
 	Overdue     []FollowUp   `json:"overdue"`
+	Unpaid      []Invoice    `json:"overdue_invoices"`
 	ThisWeek    []FollowUp   `json:"this_week"`
 	Engagements []Engagement `json:"active_engagements"`
 	Moves       []Nudge      `json:"moves"`
@@ -40,7 +41,7 @@ func (s *Store) Today(q Quiet) (Today, []Problem, error) {
 	now := s.Now()
 	today := now.Format(dateLayout)
 	weekEnd := now.AddDate(0, 0, 6).Format(dateLayout)
-	t := Today{Date: today, Overdue: []FollowUp{}, ThisWeek: []FollowUp{}, Engagements: []Engagement{}, Moves: []Nudge{}, KeepInTouch: []Nudge{}}
+	t := Today{Date: today, Overdue: []FollowUp{}, Unpaid: []Invoice{}, ThisWeek: []FollowUp{}, Engagements: []Engagement{}, Moves: []Nudge{}, KeepInTouch: []Nudge{}}
 
 	clients, problems, err := s.Clients()
 	if err != nil {
@@ -56,6 +57,17 @@ func (s *Store) Today(q Quiet) (Today, []Problem, error) {
 		return t, nil, err
 	}
 	problems = append(problems, p...)
+
+	invoices, p, err := s.Invoices()
+	if err != nil {
+		return t, nil, err
+	}
+	problems = append(problems, p...)
+	for _, inv := range invoices {
+		if inv.Status == "issued" && inv.Due != "" && inv.Due < today {
+			t.Unpaid = append(t.Unpaid, inv)
+		}
+	}
 
 	lastContact := map[string]string{}
 	for _, l := range logs {

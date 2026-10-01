@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -315,5 +316,44 @@ func TestParseLineFlag(t *testing.T) {
 		if _, err := parseLineFlag(bad); err == nil {
 			t.Errorf("%q should fail", bad)
 		}
+	}
+}
+
+func TestIssueAndPay(t *testing.T) {
+	dir := setup(t)
+	mustRun(t, "client", "add", "acme", "--name", "Acme Ltd")
+	mustRun(t, "invoice", "new", "acme", "--line", "Workshop=1000")
+
+	_, err := run(t, "invoice", "issue", "acme")
+	if err == nil || !strings.Contains(err.Error(), "business.name in the config") || !strings.Contains(err.Error(), "mavis client set acme --address") {
+		t.Fatalf("issue without details: %v", err)
+	}
+
+	cfg := os.Getenv("XDG_CONFIG_HOME") + "/mavis/config.yaml"
+	data, _ := os.ReadFile(cfg)
+	os.WriteFile(cfg, append(data, []byte("business:\n  name: Steve Ltd\n  address: [1 My Street, Leeds]\n  vat_number: GB999999973\n")...), 0o644)
+	mustRun(t, "client", "set", "acme", "--address", "1 High Street")
+
+	out := mustRun(t, "invoice", "issue", "acme", "--date", "2026-01-05")
+	if out != "Issued INV-2026-001 to Acme Ltd: 1,200.00 GBP, due 2026-02-04\n" {
+		t.Fatalf("issue: %q", out)
+	}
+	if _, err := os.Stat(dir + "/invoices/INV-2026-001.md"); err != nil {
+		t.Fatal(err)
+	}
+	if out := mustRun(t, "today"); !strings.Contains(out, "Overdue invoices") || !strings.Contains(out, "INV-2026-001") {
+		t.Fatalf("today:\n%s", out)
+	}
+	if out := mustRun(t, "stats", "--year", "2026"); !strings.Contains(out, "Invoices") || !regexp.MustCompile(`Unpaid now\s+1\s+1,200.00 GBP`).MatchString(out) {
+		t.Fatalf("stats:\n%s", out)
+	}
+	if out := mustRun(t, "invoice", "paid", "INV-2026-001", "--date", "2026-01-20"); out != "INV-2026-001 paid on 2026-01-20\n" {
+		t.Fatalf("paid: %q", out)
+	}
+	if out := mustRun(t, "today"); strings.Contains(out, "Overdue invoices") {
+		t.Fatalf("a paid invoice is not overdue:\n%s", out)
+	}
+	if _, err := run(t, "invoice", "edit", "INV-2026-001"); err == nil {
+		t.Fatal("an issued invoice cannot be edited")
 	}
 }

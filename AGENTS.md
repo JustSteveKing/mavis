@@ -107,6 +107,22 @@ will not parse makes the whole invoice a `Problem`: dropping a line from an
 invoice is worse than refusing to read it. VAT is totalled per rate,
 rounding once per rate rather than per line.
 
+**Issuing freezes by snapshot.** `IssueInvoice` copies the issuer
+(`from_*`) and the client (`to_*`) into the invoice, plus the reverse charge
+wording as `vat_note`, so rendering an old invoice never reads today's
+config or client note. Use the snapshot fields when rendering an issued
+invoice, never the client record. It also stores `net`, `vat` and `total`;
+`checkFrozen` recomputes from the lines and refuses a file whose lines no
+longer match, which is how a hand edit after issue is caught.
+
+**Invoice numbers are derived** from existing files (`nextNumber`), per year
+of the issue date, under the store lock. There is no counter. A gap would
+need a deleted issued invoice, and issued invoices cannot be discarded.
+
+**`IssueInvoice` reports every missing detail at once** (`MissingError`),
+each with the command or config key that fixes it. Keep it that way: one
+gap per attempt makes issuing a guessing game.
+
 **Whether a month is billed is derived, not stamped.** An invoice records
 `period` and `engagements`; `linesForMonth` skips an engagement any invoice
 already covers for that month, and `InvoiceCovering` drives the warning in

@@ -49,8 +49,17 @@ type Invoice struct {
 	Engagements  []string `json:"engagements,omitempty"`
 	Created      string   `json:"created,omitempty"`
 	Issued       string   `json:"issued,omitempty"`
+	TaxPoint     string   `json:"tax_point,omitempty"`
 	Due          string   `json:"due,omitempty"`
 	Paid         string   `json:"paid,omitempty"`
+
+	// Copied in at issue, so the invoice reads the same whatever changes
+	// later in the config or the client's note.
+	From        Issuer   `json:"from"`
+	ToName      string   `json:"to_name,omitempty"`
+	ToAddress   []string `json:"to_address,omitempty"`
+	ToVATNumber string   `json:"to_vat_number,omitempty"`
+	VATNote     string   `json:"vat_note,omitempty"`
 
 	Lines    []Line      `json:"lines"`
 	VATLines []VATLine   `json:"vat_lines"`
@@ -188,9 +197,20 @@ func invoiceFrom(path string, d *record.Document) (Invoice, error) {
 		Period:       d.Get("period"),
 		Created:      d.Get("created"),
 		Issued:       d.Get("issued"),
+		TaxPoint:     d.Get("tax_point"),
 		Due:          d.Get("due"),
 		Paid:         d.Get("paid"),
-		Path:         path,
+		From: Issuer{
+			Name:      d.Get("from_name"),
+			Address:   d.List("from_address"),
+			VATNumber: d.Get("from_vat_number"),
+			Email:     d.Get("from_email"),
+		},
+		ToName:      d.Get("to_name"),
+		ToAddress:   d.List("to_address"),
+		ToVATNumber: d.Get("to_vat_number"),
+		VATNote:     d.Get("vat_note"),
+		Path:        path,
 	}
 	for _, e := range d.List("engagements") {
 		inv.Engagements = append(inv.Engagements, linkTarget(e))
@@ -208,6 +228,9 @@ func invoiceFrom(path string, d *record.Document) (Invoice, error) {
 	inv.Lines = lines
 	inv.VATLines, inv.Net, inv.VAT = totals(lines)
 	inv.Total = inv.Net + inv.VAT
+	if err := checkFrozen(inv, d.Get("net"), d.Get("vat"), d.Get("total")); err != nil {
+		return inv, err
+	}
 	return inv, nil
 }
 

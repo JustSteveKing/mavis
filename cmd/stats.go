@@ -24,7 +24,8 @@ func newStatsCommand(a *app) *cobra.Command {
   retainer  the monthly rate for each month of the period it was running
   fixed     not valued per period; shown to date, as budget per day logged
 
-This is value, not revenue: what invoices say is a separate question.
+This is value, not revenue. Below it, once anything has been issued, is
+what invoices say: issued and paid in the period, and unpaid now.
 PER DAY is value over days logged. On the total line it counts only
 engagements with both a value and time, so unpriced time does not drag it
 down and a retainer with nothing logged does not inflate it.
@@ -54,7 +55,7 @@ Amounts in different currencies are totalled separately.`,
 			}
 
 			a.printf("%s\n\n", label)
-			if len(st.Engagements) == 0 && len(st.Fixed) == 0 {
+			if len(st.Engagements) == 0 && len(st.Fixed) == 0 && st.Invoicing == nil {
 				a.printf("No time logged.\n")
 				return nil
 			}
@@ -91,6 +92,33 @@ Amounts in different currencies are totalled separately.`,
 					fmt.Fprintf(w, "  %s\t%s\tbudget %s\t%s logged\t%s\n", f.Client, f.Title, f.Budget.Display(), duration.Days(f.Minutes, day), rate)
 				}
 				w.Flush()
+			}
+
+			if inv := st.Invoicing; inv != nil {
+				a.printf("\nInvoices\n")
+				rows := [][]string{}
+				add := func(label string, totals []store.InvoiceTotal, detail bool) {
+					if len(totals) == 0 {
+						rows = append(rows, []string{label, "none", "", "", ""})
+						return
+					}
+					for _, t := range totals {
+						count := fmt.Sprintf("%d", t.Count)
+						if detail {
+							rows = append(rows, []string{label, count, "net " + t.Net.Display(), "VAT " + t.VAT.Display(), t.Total.Display() + " " + t.Currency})
+						} else {
+							rows = append(rows, []string{label, count, "", "", t.Total.Display() + " " + t.Currency})
+						}
+						label = ""
+					}
+				}
+				add("Issued", inv.Invoiced, true)
+				add("Paid", inv.Paid, false)
+				add("Unpaid now", inv.Outstanding, false)
+				if len(inv.Overdue) > 0 {
+					add("of which overdue", inv.Overdue, false)
+				}
+				table(a.out, "  ", map[int]bool{1: true, 2: true, 3: true, 4: true}, rows)
 			}
 			return nil
 		},

@@ -22,6 +22,9 @@ func newInvoiceCommand(a *app) *cobra.Command {
 		newInvoiceShowCommand(a),
 		newInvoiceEditCommand(a),
 		newInvoiceDiscardCommand(a),
+		newInvoiceIssueCommand(a),
+		newInvoicePaidCommand(a, true),
+		newInvoicePaidCommand(a, false),
 	)
 	return cmd
 }
@@ -289,4 +292,86 @@ func newInvoiceDiscardCommand(a *app) *cobra.Command {
 			return nil
 		},
 	}
+}
+
+func newInvoiceIssueCommand(a *app) *cobra.Command {
+	var date, taxPoint string
+	cmd := &cobra.Command{
+		Use:   "issue <draft>",
+		Short: "Number a draft and freeze it",
+		Long: `Gives a draft the next number for the year (INV-2026-001, INV-2026-002,
+and from January INV-2027-001), stamps the issue date, tax point and due
+date, and renames it invoices/<number>.md.
+
+Everything a VAT invoice must show is checked first: your name, address and
+VAT number from the config, and the client's address. Anything missing is
+listed in one go, with how to fill it in.
+
+Your details and the client's are copied into the invoice, so it reads the
+same however either changes later. After this the invoice does not change,
+apart from being marked paid; mistakes are corrected with a credit note.`,
+		Example: `  mavis invoice issue draft-acme-2026-10
+  mavis invoice issue acme-2026-10 --date 2026-10-31`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			s, err := a.openStore()
+			if err != nil {
+				return err
+			}
+			b := a.cfg.Business
+			inv, err := s.IssueInvoice(args[0], store.IssueOptions{
+				Issuer:            store.Issuer{Name: b.Name, Address: b.Address, VATNumber: b.VATNumber, Email: b.Email},
+				ReverseChargeNote: a.cfg.Invoicing.ReverseChargeNote,
+				Date:              date,
+				TaxPoint:          taxPoint,
+			})
+			if err != nil {
+				return err
+			}
+			if a.jsonOut {
+				return a.emitJSON(inv)
+			}
+			a.printf("Issued %s to %s: %s %s, due %s\n", inv.Number, inv.ToName, inv.Total.Display(), inv.Currency, inv.Due)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&date, "date", "", "issue date, YYYY-MM-DD, today or yesterday (default: today)")
+	cmd.Flags().StringVar(&taxPoint, "tax-point", "", "tax point if it differs from the issue date")
+	return cmd
+}
+
+func newInvoicePaidCommand(a *app, paid bool) *cobra.Command {
+	var date string
+	use, short := "paid <invoice>", "Mark an invoice paid"
+	if !paid {
+		use, short = "unpaid <invoice>", "Take back a paid mark made by mistake"
+	}
+	cmd := &cobra.Command{
+		Use:   use,
+		Short: short,
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			s, err := a.openStore()
+			if err != nil {
+				return err
+			}
+			inv, err := s.SetPaid(args[0], paid, date)
+			if err != nil {
+				return err
+			}
+			if a.jsonOut {
+				return a.emitJSON(inv)
+			}
+			if paid {
+				a.printf("%s paid on %s\n", inv.Number, inv.Paid)
+			} else {
+				a.printf("%s is unpaid again\n", inv.Number)
+			}
+			return nil
+		},
+	}
+	if paid {
+		cmd.Flags().StringVar(&date, "date", "", "when it was paid, YYYY-MM-DD, today or yesterday (default: today)")
+	}
+	return cmd
 }
