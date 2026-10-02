@@ -47,10 +47,7 @@ curl -fsSL https://raw.githubusercontent.com/JustSteveKing/mavis/main/install.sh
 It downloads the archive for your platform, checks it against the
 release's `checksums.txt`, and installs to `~/.local/bin` when you have one
 and `/usr/local/bin` otherwise. `--bin-dir` chooses elsewhere, `--version
-v0.1.0` pins a release, and `--help` lists the rest. The repository is
-private for now, so until it is public, sign in with `gh auth login` first:
-the script uses the gh CLI when it is signed in, which is the only way to
-reach a private release.
+v0.1.0` pins a release, and `--help` lists the rest. It needs no account.
 
 From source, with Go 1.27 or later, the same script builds when it is run
 inside a checkout:
@@ -529,8 +526,7 @@ PATH:
 /plugin install mavis@juststeveking
 ```
 
-While the repository is private, that needs git access to it, through
-`gh auth login` or an SSH key. For the MCP server alone, without the skill:
+For the MCP server alone, without the skill:
 
 ```bash
 claude mcp add mavis -- mavis mcp

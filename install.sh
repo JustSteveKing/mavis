@@ -15,10 +15,9 @@
 # GoReleaser, checks it against that release's checksums.txt, and installs the
 # binary onto your PATH.
 #
-# The download needs no account once the repository is public. While it is
-# private, as it is for now, sign in with the gh CLI: if gh is signed in it is
-# used, because an unauthenticated request for a private release asset comes
-# back 404 rather than 403, and nothing else here can tell the difference.
+# The download needs no account. If the gh CLI is signed in it is used anyway,
+# which is what makes this work unchanged against a private fork, where an
+# unauthenticated request for a release asset comes back 404 rather than 403.
 #
 # Linux and macOS only. mavis does not ship Windows builds.
 
