@@ -151,3 +151,22 @@ func TestParseDue(t *testing.T) {
 		t.Error("want an error")
 	}
 }
+
+func TestEntriesInOneMinuteKeepTheirOrder(t *testing.T) {
+	s := newStore(t)
+	s.AddClient(NewClient{Slug: "acme"})
+	for _, summary := range []string{"first", "second", "third"} {
+		s.AddLog(NewLog{Kind: "call", Client: "acme", Summary: summary})
+	}
+	logs, _, _ := s.Logs()
+	var got []string
+	for _, l := range logs {
+		got = append(got, l.Summary)
+	}
+	if strings.Join(got, ",") != "first,second,third" {
+		t.Fatalf("order = %v", got)
+	}
+	if compareSlugs("2026-10-01-acme-call-10", "2026-10-01-acme-call-9") <= 0 {
+		t.Error("-10 comes after -9")
+	}
+}

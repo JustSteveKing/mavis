@@ -196,6 +196,10 @@ taskgo found (a custom MarshalJSON on a numeric type). The stdio runner
 returns nil on a client disconnect, as taskgo's does, for the same reason.
 `instructions.go` is what every connecting agent is told; keep it short.
 
+**TUI forms stay open on error** (`form.go`): the store's message is shown
+in the form and the input kept. Rows are `cells`, aligned across the view
+by `columnWidths`/`alignCells` with a cap, and dates go through `rel`.
+
 **`internal/tui` follows taskgo's TUI**: lazygit-style panels, the 16
 ANSI colours, a reload every two seconds that never fires while typing or
 confirming (`TestAgentChangesAppearOnTheTickButNotWhileTyping`). It acts as

@@ -32,6 +32,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateNote(msg)
 		case modeConfirmPaid:
 			return m.updateConfirmPaid(msg)
+		case modeForm:
+			return m.updateForm(msg)
+		case modeMove:
+			return m.updateMove(msg)
 		case modeHelp:
 			m.mode = modeNormal
 			return m, nil
@@ -91,6 +95,12 @@ func (m model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.startPaid()
 	case "r":
 		return m.previewReminder()
+	case "t":
+		return m.startTime()
+	case "l":
+		return m.startCall()
+	case "m":
+		return m.startMove()
 	}
 	return m, nil
 }
@@ -250,4 +260,140 @@ func (m model) previewReminder() (tea.Model, tea.Cmd) {
 	m.detailNote = "Subject: " + r.Subject + "\n\n" + r.Body + "\n\n" +
 		styleHint.Render("Once sent: mavis invoice remind "+inv.Number+" --sent")
 	return m, nil
+}
+
+// ---------------------------------------------------------------- forms
+
+func (m model) updateForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	done, status, cmd := m.form.update(msg)
+	if !done {
+		return m, cmd
+	}
+	m.mode, m.form = modeNormal, nil
+	m.reload()
+	next, clear := m.say(status)
+	return next, tea.Batch(cmd, clear)
+}
+
+// clientEngagements lists a client's engagements that time can go on,
+// active first.
+func (m model) clientEngagements(client string) []store.Engagement {
+	var active, rest []store.Engagement
+	for _, e := range m.engagements {
+		if e.Client != client || e.Status == "done" {
+			continue
+		}
+		if e.Status == "active" {
+			active = append(active, e)
+		} else {
+			rest = append(rest, e)
+		}
+	}
+	return append(active, rest...)
+}
+
+func (m model) startTime() (tea.Model, tea.Cmd) {
+	r := m.selected()
+	if r == nil || r.client == "" {
+		return m.say("t logs time; select a client or an engagement first")
+	}
+	engagements := m.clientEngagements(r.client)
+	if len(engagements) == 0 {
+		return m.say(r.client + " has no engagement to log time to; add one with mavis engagement add")
+	}
+	var slugs, labels []string
+	selected := 0
+	for i, e := range engagements {
+		slugs = append(slugs, e.Slug)
+		labels = append(labels, e.Title+"  ("+e.Slug+")")
+		if e.Slug == r.engagement {
+			selected = i
+		}
+	}
+	m.form = newForm("Log time for "+r.client, func(v map[string]string) (string, error) {
+		e, err := m.s.AddTime(store.NewTime{Engagement: v["engagement"], Duration: v["duration"], What: v["what"], Date: v["date"]})
+		if err != nil {
+			return "", err
+		}
+		status := fmt.Sprintf("Logged %s to %s on %s", e.Time, e.Engagement, e.Date)
+		if by, err := m.s.InvoiceCovering(e.Engagement, e.Date[:7]); err == nil && by != "" {
+			status += "; that month is already on " + by + ", so this is not"
+		}
+		return status, nil
+	},
+		choiceField("engagement", "Engagement", slugs, labels, selected),
+		textField("duration", "Duration", "1d, 0.5d, 3h, 45m or 1h30m", ""),
+		textField("what", "What", "optional", ""),
+		textField("date", "Date", "YYYY-MM-DD, today or yesterday", "today"),
+	)
+	m.form.fields[2].optional = true
+	m.form.focusField(1) // the engagement is usually right already
+	m.mode = modeForm
+	return m, nil
+}
+
+func (m model) startCall() (tea.Model, tea.Cmd) {
+	r := m.selected()
+	if r == nil || r.client == "" {
+		return m.say("l logs a call or meeting; select a client first")
+	}
+	client := r.client
+	m.form = newForm("Log for "+client, func(v map[string]string) (string, error) {
+		nl := store.NewLog{Kind: v["kind"], Client: client, Summary: v["summary"]}
+		if v["follow_up"] != "" {
+			nl.FollowUps = []store.NewFollowUp{{Text: v["follow_up"], Due: v["due"]}}
+		} else if v["due"] != "" {
+			return "", fmt.Errorf("a due date needs a follow-up")
+		}
+		l, err := m.s.AddLog(nl)
+		if err != nil {
+			return "", err
+		}
+		status := "Logged " + l.Kind + " with " + client
+		if len(l.FollowUps) > 0 {
+			status += ", follow-up: " + l.FollowUps[0].Text
+		}
+		return status, nil
+	},
+		choiceField("kind", "Kind", []string{"call", "meeting", "email", "note"}, nil, 0),
+		textField("summary", "Summary", "what happened", ""),
+		textField("follow_up", "Follow-up", "optional: what happens next", ""),
+		textField("due", "Due", "optional: YYYY-MM-DD or +3d", ""),
+	)
+	m.form.fields[2].optional = true
+	m.form.fields[3].optional = true
+	m.form.focusField(1)
+	m.mode = modeForm
+	return m, nil
+}
+
+// ---------------------------------------------------------------- moves
+
+func (m model) startMove() (tea.Model, tea.Cmd) {
+	r := m.selected()
+	if r == nil || r.client == "" {
+		return m.say("m moves a client; select one first")
+	}
+	m.mode = modeMove
+	return m, nil
+}
+
+var moveKeys = map[string]string{"a": "active", "w": "warm", "c": "cold", "p": "prospect"}
+
+func (m model) updateMove(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	m.mode = modeNormal
+	status, ok := moveKeys[msg.String()]
+	r := m.selected()
+	if !ok || r == nil {
+		return m.say("Not moved")
+	}
+	c, changed, err := m.s.SetClientStatus(r.client, status)
+	if err != nil {
+		return m.say(err.Error())
+	}
+	m.reload()
+	if !changed {
+		return m.say(c.Name + " is already " + status)
+	}
+	return m.say(c.Name + " is now " + status)
 }

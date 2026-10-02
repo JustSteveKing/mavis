@@ -470,11 +470,25 @@ an invoice's lines, totals and how far it has been chased. It re-reads the
 files every two seconds, so a call an agent logs, or a note you add in
 Obsidian, appears on its own. It never reloads while you are typing.
 
-From it you can tick off follow-ups (`x`), add a note to a client (`n`),
-mark an invoice paid (`p`, after a y/n) and preview the next reminder
-(`r`). Issuing, sending and recording reminders as sent stay at the CLI.
-`?` lists the keys, and the footer only offers the ones that do something
-for what is selected.
+Most of a working day can happen there:
+
+- `l` logs a call, meeting or email, with a follow-up and its due date
+- `t` logs time to one of the client's engagements
+- `n` adds a quick note
+- `m` moves a client to active, warm, cold or prospect
+- `x` ticks off a follow-up
+- `p` marks an invoice paid, after a y/n
+- `r` previews the next payment reminder
+
+Calls and time open a small form in the detail pane. If something in it is
+wrong, such as a duration mavis cannot read, it says so there and keeps
+what you typed. Issuing, sending and recording reminders as sent stay at
+the CLI. `?` lists the keys, and the footer only offers the ones that do
+something for what is selected.
+
+Columns line up across each view, dates read as "in 3 days" or "12 days
+ago", and the side panel keeps a running total of what you are owed and
+how much time you have logged this month.
 
 ## Agents
 

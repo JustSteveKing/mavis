@@ -66,20 +66,33 @@ const (
 	modeNormal      mode = iota
 	modeNote             // typing a note against a client
 	modeConfirmPaid      // y/n before marking an invoice paid
+	modeForm             // filling in a form: time, a call
+	modeMove             // choosing a client's new status
 	modeHelp
 )
 
-// row is one line in the list. Headers divide Today into sections and are
+// row is one line in the list. Headers divide a view into sections and are
 // never selectable; the cursor steps over them.
+//
+// A row is cells, not a preformatted line, so the list can align columns
+// across the whole view. text is the cells joined, for matching a row
+// across reloads.
 type row struct {
 	header bool
+	cells  []string
 	text   string
-	tone   string // "", "urgent", "warn", "ok", "dim", "agent"
+	count  int    // on a header: how many rows the section holds
+	tone   string // "", "urgent", "warn", "ok", "dim"
 
-	client   string
-	invoice  string
-	quote    string
-	followUp *store.FollowUp
+	client     string
+	engagement string
+	invoice    string
+	quote      string
+	followUp   *store.FollowUp
+}
+
+func item(tone string, cells ...string) row {
+	return row{cells: cells, text: strings.Join(cells, "  "), tone: tone}
 }
 
 func (r row) selectable() bool { return !r.header }
@@ -102,6 +115,8 @@ type model struct {
 	// preview, say.
 	detailNote string
 
+	form *form
+
 	// The store, as of the last load.
 	today       store.Today
 	clients     []store.Client
@@ -110,6 +125,8 @@ type model struct {
 	invoices    []store.Invoice
 	quotes      []store.Quote
 	problems    int
+
+	monthMinutes int // time logged this month, for the summary
 }
 
 // New returns the model for a store.
@@ -172,6 +189,18 @@ func (m *model) reload() {
 		return
 	}
 	problems = append(problems, p...)
+	entries, p, err := m.s.TimeEntries()
+	if err != nil {
+		m.err = err
+		return
+	}
+	problems = append(problems, p...)
+	m.monthMinutes = 0
+	for _, e := range entries {
+		if strings.HasPrefix(e.Date, m.today.Date[:7]) {
+			m.monthMinutes += e.Minutes
+		}
+	}
 	m.problems = len(problems)
 	m.err = nil
 	m.buildRows()
@@ -195,71 +224,97 @@ func (m *model) buildRows() {
 func (m model) todayRows() []row {
 	t := m.today
 	var rows []row
-	section := func(title string) { rows = append(rows, row{header: true, text: title}) }
+	section := func(title string, n int) { rows = append(rows, row{header: true, text: title, count: n}) }
+	day := t.Date
 
 	if len(t.Unpaid) > 0 {
-		section("Overdue invoices")
+		section("Overdue invoices", len(t.Unpaid))
 		for _, inv := range t.Unpaid {
-			rows = append(rows, row{
-				text:    fmt.Sprintf("%s  %s  %s owed, due %s", inv.Number, inv.Client, gbp(inv.Balance, inv.Currency), inv.Due),
-				tone:    "urgent",
-				client:  inv.Client,
-				invoice: inv.Number,
-			})
+			r := item("urgent", inv.Number, inv.Client, gbp(inv.Balance, inv.Currency)+" owed", "due "+rel(inv.Due, day))
+			r.client, r.invoice = inv.Client, inv.Number
+			rows = append(rows, r)
 		}
 	}
 	if len(t.Overdue) > 0 {
-		section("Overdue follow-ups")
+		section("Overdue follow-ups", len(t.Overdue))
 		for i := range t.Overdue {
 			f := t.Overdue[i]
-			rows = append(rows, row{text: fmt.Sprintf("%s  %s, due %s", f.Text, f.Client, f.Due), tone: "urgent", client: f.Client, followUp: &f})
+			r := item("urgent", f.Text, f.Client, "", "due "+rel(f.Due, day))
+			r.client, r.followUp = f.Client, &f
+			rows = append(rows, r)
 		}
 	}
 	if len(t.Retainers) > 0 {
-		section("Retainers to bill")
-		for _, r := range t.Retainers {
-			rows = append(rows, row{text: fmt.Sprintf("%s  %s, %s", r.Client, r.Title, monthName(r.Month)), tone: "warn", client: r.Client})
+		section("Retainers to bill", len(t.Retainers))
+		for _, rd := range t.Retainers {
+			r := item("warn", rd.Title, rd.Client, rd.Rate, monthName(rd.Month))
+			r.client, r.engagement = rd.Client, rd.Engagement
+			rows = append(rows, r)
 		}
 	}
 	if len(t.Quotes) > 0 {
-		section("Quotes waiting")
+		section("Quotes waiting", len(t.Quotes))
 		for _, q := range t.Quotes {
-			tone := ""
-			if q.Expired(t.Date) {
-				tone = "warn"
+			tone, when := "", "sent "+rel(q.Sent, day)
+			if q.Expired(day) {
+				tone, when = "warn", "expired "+rel(q.ValidUntil, day)
 			}
-			rows = append(rows, row{text: fmt.Sprintf("%s  %s  %s, sent %s", q.Number, q.Client, q.Title, q.Sent), tone: tone, client: q.Client, quote: q.Number})
+			r := item(tone, q.Number, q.Client, q.Title, when)
+			r.client, r.quote = q.Client, q.Number
+			rows = append(rows, r)
 		}
 	}
 	if len(t.ThisWeek) > 0 {
-		section("Due this week")
+		section("Due this week", len(t.ThisWeek))
 		for i := range t.ThisWeek {
 			f := t.ThisWeek[i]
-			rows = append(rows, row{text: fmt.Sprintf("%s  %s, due %s", f.Text, f.Client, f.Due), client: f.Client, followUp: &f})
+			r := item("", f.Text, f.Client, "", "due "+rel(f.Due, day))
+			r.client, r.followUp = f.Client, &f
+			rows = append(rows, r)
 		}
 	}
 	if len(t.Moves) > 0 {
-		section("Worth a move?")
+		section("Worth a move?", len(t.Moves))
 		for _, n := range t.Moves {
-			rows = append(rows, row{text: fmt.Sprintf("%s  %s: %s?", n.Client, n.Reason, n.Suggest), tone: "dim", client: n.Client})
+			r := item("dim", n.Status+" to "+n.Suggest+"?", n.Client, "", fmt.Sprintf("quiet %d days", n.QuietDays))
+			r.client = n.Client
+			rows = append(rows, r)
 		}
 	}
 	if len(t.KeepInTouch) > 0 {
-		section("Keep in touch")
+		section("Keep in touch", len(t.KeepInTouch))
 		for _, n := range t.KeepInTouch {
-			rows = append(rows, row{text: fmt.Sprintf("%s  %s", n.Client, n.Reason), tone: "dim", client: n.Client})
+			last := "no contact logged"
+			if n.LastContact != "" {
+				last = "last spoke " + rel(n.LastContact, day)
+			}
+			r := item("dim", n.Name, n.Client, "", last)
+			r.client = n.Client
+			rows = append(rows, r)
 		}
 	}
 	if len(t.Engagements) > 0 {
-		section("Active engagements")
+		section("Active engagements", len(t.Engagements))
 		for _, e := range t.Engagements {
-			rows = append(rows, row{text: fmt.Sprintf("%s  %s", e.Client, e.Title), tone: "dim", client: e.Client})
+			basis := e.Basis
+			if e.Rate != "" {
+				basis += " @ " + e.Rate
+			}
+			r := item("dim", e.Title, e.Client, basis, "")
+			r.client, r.engagement = e.Client, e.Slug
+			rows = append(rows, r)
 		}
 	}
 	return rows
 }
 
 func (m model) clientRows() []row {
+	last := map[string]string{}
+	for _, l := range m.logs {
+		if d := l.Date[:10]; d > last[l.Client] {
+			last[l.Client] = d
+		}
+	}
 	var rows []row
 	// Active first: they are the ones opened most.
 	for _, status := range []string{"active", "warm", "prospect", "cold"} {
@@ -272,13 +327,19 @@ func (m model) clientRows() []row {
 		if len(in) == 0 {
 			continue
 		}
-		rows = append(rows, row{header: true, text: strings.ToUpper(status[:1]) + status[1:]})
+		rows = append(rows, row{header: true, text: strings.ToUpper(status[:1]) + status[1:], count: len(in)})
 		for _, c := range in {
 			tone := ""
 			if status == "cold" {
 				tone = "dim"
 			}
-			rows = append(rows, row{text: fmt.Sprintf("%-12s %s", c.Slug, c.Name), tone: tone, client: c.Slug})
+			spoke := "no contact logged"
+			if d := last[c.Slug]; d != "" {
+				spoke = "last spoke " + rel(d, m.today.Date)
+			}
+			r := item(tone, c.Name, c.Slug, c.Contact, spoke)
+			r.client = c.Slug
+			rows = append(rows, r)
 		}
 	}
 	return rows
@@ -292,20 +353,26 @@ func (m model) invoiceRows() []row {
 		if name == "" {
 			name = inv.Slug
 		}
-		tone := ""
+		tone, when := "", ""
 		switch {
 		case inv.Status == "draft":
 			tone = "dim"
 		case inv.Balance > 0 && inv.Due < m.today.Date:
-			tone = "urgent"
-		case inv.Status == "paid" || inv.FullyCredited():
+			tone, when = "urgent", "due "+rel(inv.Due, m.today.Date)
+		case inv.Balance > 0:
+			when = "due " + rel(inv.Due, m.today.Date)
+		case inv.Status == "paid":
+			tone, when = "ok", "paid "+rel(inv.Paid, m.today.Date)
+		case inv.FullyCredited():
 			tone = "ok"
 		}
 		amount := gbp(inv.Total, inv.Currency)
 		if inv.Kind == "credit" {
 			amount = "-" + amount
 		}
-		rows = append(rows, row{text: fmt.Sprintf("%-22s %-9s %-10s %s", name, inv.Display(), inv.Client, amount), tone: tone, client: inv.Client, invoice: name})
+		r := item(tone, name, inv.Display(), inv.Client, amount, when)
+		r.client, r.invoice = inv.Client, name
+		rows = append(rows, r)
 	}
 	return rows
 }
@@ -327,7 +394,9 @@ func (m model) quoteRows() []row {
 		case "accepted":
 			tone = "ok"
 		}
-		rows = append(rows, row{text: fmt.Sprintf("%-18s %-9s %-10s %s", name, q.Display(m.today.Date), q.Client, q.Title), tone: tone, client: q.Client, quote: name})
+		r := item(tone, name, q.Display(m.today.Date), q.Client, q.Title)
+		r.client, r.quote = q.Client, name
+		rows = append(rows, r)
 	}
 	return rows
 }
@@ -401,6 +470,33 @@ func gbp(p money.Pence, currency string) string {
 		return "$" + p.Display()
 	}
 	return p.Display() + " " + currency
+}
+
+// rel says when a date is, from today, the way you would say it: "today",
+// "in 3 days", "12 days ago", and the date itself once it is far enough
+// off that a count stops helping.
+func rel(date, today string) string {
+	d, err1 := time.Parse("2006-01-02", date)
+	t, err2 := time.Parse("2006-01-02", today)
+	if err1 != nil || err2 != nil {
+		return date
+	}
+	n := int(d.Sub(t).Hours() / 24)
+	switch {
+	case n == 0:
+		return "today"
+	case n == 1:
+		return "tomorrow"
+	case n == -1:
+		return "yesterday"
+	case n > 1 && n <= 60:
+		return fmt.Sprintf("in %d days", n)
+	case n < -1 && n >= -60:
+		return fmt.Sprintf("%d days ago", -n)
+	case d.Year() == t.Year():
+		return "on " + d.Format("2 Jan")
+	}
+	return "on " + d.Format("2 Jan 2006")
 }
 
 func monthName(month string) string {

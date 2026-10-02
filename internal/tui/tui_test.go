@@ -209,3 +209,137 @@ func rowsText(m model) string {
 	}
 	return b.String()
 }
+
+func typeText(t *testing.T, m model, s string) model {
+	t.Helper()
+	for _, r := range s {
+		m = press(t, m, string(r))
+	}
+	return m
+}
+
+func ctrlS(t *testing.T, m model) model {
+	t.Helper()
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	return next.(model)
+}
+
+func withEngagement(t *testing.T) (*store.Store, model) {
+	t.Helper()
+	s, m := seeded(t)
+	s.AddEngagement(store.NewEngagement{Client: "acme", Name: "reporting", Title: "Reporting", Basis: "day", Rate: "650"})
+	m.reload()
+	return s, m
+}
+
+func TestLogTimeFromAForm(t *testing.T) {
+	s, m := withEngagement(t)
+	m = press(t, m, "t")
+	if m.mode != modeForm || m.form.fields[0].value() != "acme-reporting" {
+		t.Fatalf("form should open on acme's engagement: %v", m.mode)
+	}
+
+	// A bad duration keeps the form open, says why, and keeps what was typed.
+	m = typeText(t, m, "ages")
+	m = ctrlS(t, m)
+	if m.mode != modeForm || !strings.Contains(m.form.err, "ages") {
+		t.Fatalf("a bad duration should stay in the form: mode %v, err %q", m.mode, m.form.err)
+	}
+	if m.form.fields[1].value() != "ages" {
+		t.Fatal("what was typed should be kept")
+	}
+
+	for range 4 {
+		next, _ := m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+		m = next.(model)
+	}
+	m = typeText(t, m, "1h30m")
+	m = ctrlS(t, m)
+	if m.mode != modeNormal || !strings.HasPrefix(m.status, "Logged 1h30m to acme-reporting") {
+		t.Fatalf("mode %v, status %q", m.mode, m.status)
+	}
+	if entries, _, _ := s.TimeEntries(); len(entries) != 1 || entries[0].Minutes != 90 {
+		t.Fatalf("entries %+v", entries)
+	}
+	if m.monthMinutes != 90 {
+		t.Fatalf("the summary should count it: %d", m.monthMinutes)
+	}
+}
+
+func TestLogTimeNeedsAnEngagement(t *testing.T) {
+	_, m := seeded(t)
+	if m = press(t, m, "t"); m.mode != modeNormal || !strings.Contains(m.status, "no engagement") {
+		t.Fatalf("mode %v, status %q", m.mode, m.status)
+	}
+}
+
+func TestLogACallWithAFollowUp(t *testing.T) {
+	s, m := seeded(t)
+	m = press(t, m, "l")
+	m = typeText(t, m, "Agreed the PO")
+	m = press(t, m, "tab")
+	m = typeText(t, m, "Send the contract")
+	m = press(t, m, "tab")
+	m = typeText(t, m, "+2d")
+	m = press(t, m, "enter") // enter on the last field saves
+	if m.mode != modeNormal || !strings.Contains(m.status, "follow-up: Send the contract") {
+		t.Fatalf("mode %v, status %q", m.mode, m.status)
+	}
+	logs, _, _ := s.Logs()
+	last := logs[len(logs)-1]
+	if last.Kind != "call" || len(last.FollowUps) != 1 || last.FollowUps[0].Due != "2026-10-03" {
+		t.Fatalf("logged %+v", last)
+	}
+
+	// A due date without a follow-up is refused, in the form.
+	m = press(t, m, "l")
+	m = typeText(t, m, "Quick chat")
+	m = press(t, m, "tab", "tab")
+	m = typeText(t, m, "+1d")
+	m = ctrlS(t, m)
+	if m.mode != modeForm || !strings.Contains(m.form.err, "needs a follow-up") {
+		t.Fatalf("mode %v err %q", m.mode, m.form.err)
+	}
+	if m = press(t, m, "esc"); m.mode != modeNormal || m.status != "Cancelled" {
+		t.Fatalf("esc: %v %q", m.mode, m.status)
+	}
+}
+
+func TestMoveAClient(t *testing.T) {
+	s, m := seeded(t)
+	m = press(t, m, "m")
+	if m.mode != modeMove || !strings.Contains(m.statusLine(), "Move acme to:") {
+		t.Fatalf("prompt: %q", m.statusLine())
+	}
+	m = press(t, m, "w")
+	if c, _ := s.ResolveClient("acme"); c.Status != "warm" {
+		t.Fatalf("status %s", c.Status)
+	}
+	if m = press(t, m, "m", "x"); m.status != "Not moved" {
+		t.Fatalf("other keys cancel: %q", m.status)
+	}
+}
+
+func TestRel(t *testing.T) {
+	for date, want := range map[string]string{
+		"2026-10-01": "today", "2026-10-02": "tomorrow", "2026-09-30": "yesterday",
+		"2026-10-05": "in 4 days", "2026-09-19": "12 days ago",
+		"2026-03-03": "on 3 Mar", "2025-12-25": "on 25 Dec 2025",
+	} {
+		if got := rel(date, "2026-10-01"); got != want {
+			t.Errorf("rel(%s) = %q, want %q", date, got, want)
+		}
+	}
+}
+
+func TestColumnsAlign(t *testing.T) {
+	rows := []row{item("", "a", "bb", "c"), item("", "aaaa", "b", "c")}
+	w := columnWidths(rows)
+	if got := alignCells(rows[0].cells, w); got != "a     bb  c" {
+		t.Fatalf("%q", got)
+	}
+	long := strings.Repeat("x", 50)
+	if got := alignCells([]string{long, "y"}, columnWidths([]row{item("", long, "y")})); lipgloss.Width(got) != maxCell+2+1 {
+		t.Fatalf("a long cell should be capped: %q", got)
+	}
+}

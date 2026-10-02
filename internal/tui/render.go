@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/JustSteveKing/mavis/internal/duration"
+	"github.com/JustSteveKing/mavis/internal/money"
 	"github.com/JustSteveKing/mavis/internal/store"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -28,7 +30,7 @@ func (m model) View() string {
 
 	side := box("1 Views", sideWidth, body, m.focus == focusViews, m.viewsPanel())
 	list := box("2 "+m.view.String(), mainW, listH, m.focus == focusList, m.listPanel(listH-2, mainW-2))
-	detail := box("", mainW, detailH, false, m.detailPanel())
+	detail := box(m.detailTitle(), mainW, detailH, m.mode == modeForm, m.detailPanel(mainW-2))
 	main := lipgloss.JoinVertical(lipgloss.Left, list, detail)
 	// Truncated, not wrapped: a footer that wraps on a narrow terminal pushes
 	// the whole layout down a line.
@@ -56,17 +58,35 @@ func (m model) viewsPanel() string {
 		}
 		lines = append(lines, label)
 	}
+
+	// A running summary: what is owed, what is late, what this month holds.
+	var owed money.Pence
+	currency := "GBP"
+	for _, inv := range m.invoices {
+		if inv.Balance > 0 {
+			owed += inv.Balance
+			currency = inv.Currency
+		}
+	}
+	lines = append(lines, "", styleDim.Render(" Owed"), " "+gbp(owed, currency))
+	if n := len(m.today.Unpaid); n > 0 {
+		lines = append(lines, styleUrgent.Render(fmt.Sprintf(" %d overdue", n)))
+	}
+	lines = append(lines, "", styleDim.Render(" This month"), " "+duration.Days(m.monthMinutes, m.s.DayMinutes)+" logged")
+
 	if m.problems > 0 {
 		lines = append(lines, "", styleWarn.Render(fmt.Sprintf(" %d file(s) unread", m.problems)), styleHint.Render(" mavis client list"), styleHint.Render(" names them"))
 	}
 	return strings.Join(lines, "\n")
 }
 
-// listPanel renders the rows that fit, scrolled so the cursor stays in view.
+// listPanel renders the rows that fit, scrolled so the cursor stays in
+// view, with each column aligned across the whole view.
 func (m model) listPanel(height, width int) string {
 	if len(m.rows) == 0 {
-		return styleHint.Render(" Nothing here yet.")
+		return styleHint.Render(" " + m.emptyText())
 	}
+	widths := columnWidths(m.rows)
 	cursor := m.cursor[m.view]
 	start := 0
 	if cursor >= height {
@@ -76,15 +96,16 @@ func (m model) listPanel(height, width int) string {
 	for i := start; i < len(m.rows) && i < start+height; i++ {
 		r := m.rows[i]
 		if r.header {
-			lines = append(lines, styleSection.Render(" "+r.text))
+			lines = append(lines, styleSection.Render(" "+r.text)+styleDim.Render(fmt.Sprintf("  %d", r.count)))
 			continue
 		}
 		// The marker as well as the bar: the bar is colour, and the cursor
 		// has to show without it.
-		text := "   " + r.text
+		lead := "   "
 		if i == cursor {
-			text = " › " + r.text
+			lead = " › "
 		}
+		text := lead + alignCells(r.cells, widths)
 		switch {
 		case i == cursor && m.focus == focusList:
 			text = styleSelected.Render(pad(text, width))
@@ -96,6 +117,50 @@ func (m model) listPanel(height, width int) string {
 		lines = append(lines, text)
 	}
 	return strings.Join(lines, "\n")
+}
+
+// maxCell caps a column, so one long title cannot push the rest off screen.
+const maxCell = 32
+
+func columnWidths(rows []row) []int {
+	var widths []int
+	for _, r := range rows {
+		for i, c := range r.cells {
+			if i >= len(widths) {
+				widths = append(widths, 0)
+			}
+			widths[i] = max(widths[i], min(lipgloss.Width(c), maxCell))
+		}
+	}
+	return widths
+}
+
+func alignCells(cells []string, widths []int) string {
+	var parts []string
+	for i, c := range cells {
+		if lipgloss.Width(c) > maxCell {
+			c = truncate(c, maxCell-1) + "…"
+		}
+		if i < len(cells)-1 {
+			c = pad(c, widths[i])
+		}
+		parts = append(parts, c)
+	}
+	return strings.TrimRight(strings.Join(parts, "  "), " ")
+}
+
+func (m model) emptyText() string {
+	switch m.view {
+	case viewToday:
+		return "Nothing needs you today."
+	case viewClients:
+		return "No clients yet. mavis client add <slug> adds one."
+	case viewInvoices:
+		return "No invoices yet. mavis invoice new <client> drafts one."
+	case viewQuotes:
+		return "No quotes yet. mavis quote new <client> drafts one."
+	}
+	return ""
 }
 
 func tone(t string) lipgloss.Style {
@@ -116,7 +181,34 @@ func tone(t string) lipgloss.Style {
 
 // ---------------------------------------------------------------- detail
 
-func (m model) detailPanel() string {
+func (m model) detailTitle() string {
+	if m.mode == modeForm {
+		return ""
+	}
+	if m.detailNote != "" {
+		return "Reminder preview"
+	}
+	r := m.selected()
+	switch {
+	case r == nil:
+		return ""
+	case r.invoice != "":
+		return r.invoice
+	case r.quote != "":
+		return r.quote
+	}
+	for _, c := range m.clients {
+		if r != nil && c.Slug == r.client {
+			return c.Name
+		}
+	}
+	return ""
+}
+
+func (m model) detailPanel(width int) string {
+	if m.mode == modeForm && m.form != nil {
+		return indent(m.form.view(width - 2))
+	}
 	if m.detailNote != "" {
 		return indent(m.detailNote)
 	}
@@ -157,7 +249,7 @@ func (m model) clientDetail(c store.Client) string {
 	var b strings.Builder
 	b.WriteString(styleBold.Render(c.Name) + styleDim.Render("  "+c.Slug+" · "+c.Status))
 	if c.StatusSince != "" {
-		b.WriteString(styleDim.Render(" since " + c.StatusSince))
+		b.WriteString(styleDim.Render(" since " + rel(c.StatusSince, m.today.Date)))
 	}
 	b.WriteString("\n")
 	if who := strings.TrimSpace(strings.Join([]string{c.Contact, c.Email, c.Phone}, "  ")); who != "" {
@@ -188,13 +280,13 @@ func (m model) clientDetail(c store.Client) string {
 			if !f.Done {
 				due := ""
 				if f.Due != "" {
-					due = styleDim.Render(" due " + f.Due)
+					due = styleDim.Render(" due " + rel(f.Due, m.today.Date))
 				}
 				open = append(open, "[ ] "+f.Text+due)
 			}
 		}
 		if len(recent) < 4 {
-			line := styleDim.Render(l.Date[:10]+" "+l.Kind+"  ") + firstLine(l.Summary)
+			line := styleDim.Render(pad(rel(l.Date[:10], m.today.Date), 12)+" "+pad(l.Kind, 7)) + firstLine(l.Summary)
 			recent = append(recent, line)
 		}
 	}
@@ -220,7 +312,7 @@ func (m model) invoiceDetail(inv store.Invoice) string {
 	var facts []string
 	for _, f := range [][2]string{{"issued", inv.Issued}, {"due", inv.Due}, {"paid", inv.Paid}} {
 		if f[1] != "" {
-			facts = append(facts, f[0]+" "+f[1])
+			facts = append(facts, f[0]+" "+rel(f[1], m.today.Date))
 		}
 	}
 	if len(facts) > 0 {
@@ -242,7 +334,7 @@ func (m model) invoiceDetail(inv store.Invoice) string {
 		sent, _ := m.s.Reminders(inv.Number)
 		chase := "Not chased yet."
 		if len(sent) > 0 {
-			chase = fmt.Sprintf("%d reminder(s) sent, last %s.", len(sent), sent[len(sent)-1].Date[:10])
+			chase = fmt.Sprintf("%d reminder(s) sent, the last %s.", len(sent), rel(sent[len(sent)-1].Date[:10], m.today.Date))
 		}
 		b.WriteString("\n" + styleUrgent.Render("Overdue. ") + chase + styleHint.Render(" r previews the next reminder.") + "\n")
 	}
@@ -257,7 +349,7 @@ func (m model) quoteDetail(q store.Quote) string {
 	}
 	b.WriteString(styleBold.Render(name+": "+q.Title) + styleDim.Render("  "+q.Client+" · "+q.Display(m.today.Date)) + "\n")
 	if q.Sent != "" {
-		b.WriteString(styleDim.Render("sent "+q.Sent+" · valid until "+q.ValidUntil) + "\n")
+		b.WriteString(styleDim.Render("sent "+rel(q.Sent, m.today.Date)+" · valid until "+rel(q.ValidUntil, m.today.Date)) + "\n")
 	}
 	if q.Scope != "" {
 		b.WriteString("\n" + q.Scope + "\n")
@@ -281,6 +373,14 @@ func (m model) statusLine() string {
 	switch m.mode {
 	case modeNote:
 		return m.input.View()
+	case modeMove:
+		name := ""
+		if r := m.selected(); r != nil {
+			name = r.client
+		}
+		return styleWarn.Render("Move "+name+" to:") + "  " + styleKey.Render("a") + " active  " + styleKey.Render("w") + " warm  " + styleKey.Render("c") + " cold  " + styleKey.Render("p") + " prospect  " + styleHint.Render("any other key cancels")
+	case modeForm:
+		return styleHint.Render("Filling in a form; the list waits until you save or cancel.")
 	case modeConfirmPaid:
 		inv, _ := m.invoiceFor(m.selected())
 		return styleWarn.Render(fmt.Sprintf("Mark %s paid today, %s? y/n", inv.Number, gbp(inv.Balance, inv.Currency)))
@@ -291,8 +391,17 @@ func (m model) statusLine() string {
 	return styleHint.Render(m.today.Date)
 }
 
-// footer offers only the keys that do something for what is selected.
+// footer offers only the keys that do something for what is selected, or
+// for the form that is open.
 func (m model) footer() string {
+	if m.mode == modeForm {
+		keys := [][2]string{{"tab", "next field"}, {"←/→", "choose"}, {"ctrl+s", "save"}, {"esc", "cancel"}}
+		var parts []string
+		for _, k := range keys {
+			parts = append(parts, styleKey.Render(k[0])+" "+styleHint.Render(k[1]))
+		}
+		return strings.Join(parts, "  ")
+	}
 	keys := [][2]string{{"tab", "panel"}, {"j/k", "move"}}
 	if m.focus == focusList {
 		if r := m.selected(); r != nil {
@@ -303,7 +412,7 @@ func (m model) footer() string {
 				keys = append(keys, [2]string{"x", "done"})
 			}
 			if r.client != "" {
-				keys = append(keys, [2]string{"n", "note"})
+				keys = append(keys, [2]string{"l", "log call"}, [2]string{"t", "time"}, [2]string{"n", "note"}, [2]string{"m", "move"})
 			}
 			if inv, ok := m.invoiceFor(r); ok && inv.Kind == "invoice" && inv.Status == "issued" {
 				keys = append(keys, [2]string{"p", "paid"})
@@ -327,7 +436,10 @@ func (m model) helpView() string {
 		{"j, k", "move down and up"},
 		{"enter", "in Today, open the invoice, quote or client behind a row"},
 		{"x", "tick off the selected follow-up"},
-		{"n", "add a note to the selected client"},
+		{"l", "log a call, meeting or email, with a follow-up if there is one"},
+		{"t", "log time to one of the selected client's engagements"},
+		{"n", "add a quick note to the selected client"},
+		{"m", "move the selected client: active, warm, cold or prospect"},
 		{"p", "mark the selected invoice paid today, after asking"},
 		{"r", "preview the next payment reminder for an overdue invoice"},
 		{"R", "reload now (it also reloads every two seconds)"},

@@ -132,7 +132,12 @@ func (s *Store) Logs() ([]LogEntry, []Problem, error) {
 		}
 		out = append(out, logFrom(path, d))
 	}
-	slices.SortStableFunc(out, func(a, b LogEntry) int { return strings.Compare(a.Date, b.Date) })
+	slices.SortStableFunc(out, func(a, b LogEntry) int {
+		if c := strings.Compare(a.Date, b.Date); c != 0 {
+			return c
+		}
+		return compareSlugs(a.Slug, b.Slug)
+	})
 	return out, problems, nil
 }
 
@@ -445,4 +450,26 @@ func (s *Store) CompleteFollowUpExact(logSlug, text string) (FollowUp, error) {
 		return fmt.Errorf("no follow-up %q in %s: %w", text, logSlug, ErrNotFound)
 	})
 	return out, err
+}
+
+var numbered = regexp.MustCompile(`^(.*)-(\d+)$`)
+
+// compareSlugs orders entries from one minute the way freePath named them:
+// name, then name-2, name-3. Plain string order puts name-2 first, since a
+// hyphen sorts before the dot of ".md", which showed a second call above the
+// first in a client's timeline.
+func compareSlugs(a, b string) int {
+	split := func(s string) (string, int) {
+		if m := numbered.FindStringSubmatch(s); m != nil {
+			n, _ := strconv.Atoi(m[2])
+			return m[1], n
+		}
+		return s, 1
+	}
+	ab, an := split(a)
+	bb, bn := split(b)
+	if c := strings.Compare(ab, bb); c != 0 {
+		return c
+	}
+	return an - bn
 }
