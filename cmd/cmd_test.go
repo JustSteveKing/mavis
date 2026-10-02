@@ -686,3 +686,15 @@ func TestCompletionInstall(t *testing.T) {
 		t.Fatalf("unknown shell: %v", err)
 	}
 }
+
+// Cobra fixes its completion output when the command is built; the scripts
+// must still go to whatever output is set afterwards.
+func TestCompletionScriptsFollowSetOut(t *testing.T) {
+	setup(t)
+	for _, shell := range []string{"bash", "zsh", "fish", "powershell"} {
+		out := mustRun(t, "completion", shell)
+		if len(out) < 100 || !strings.Contains(out, "mavis") {
+			t.Errorf("%s: %d bytes", shell, len(out))
+		}
+	}
+}

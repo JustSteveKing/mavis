@@ -34,6 +34,7 @@ func addCompletionInstall(root *cobra.Command) {
 	if completion == nil {
 		return
 	}
+	writeAtRunTime(root, completion)
 	var yes bool
 	install := &cobra.Command{
 		Use:   "install [bash|zsh|fish]",
@@ -238,4 +239,42 @@ func onZshFpath(dir string) bool {
 		}
 	}
 	return false
+}
+
+// writeAtRunTime re-points Cobra's generated `completion <shell>` commands at
+// the output in effect when they run. Cobra reads c.OutOrStdout() inside
+// InitDefaultCompletionCmd and keeps it, so calling that while the root
+// command is built, as this file has to, fixes the script to the process's
+// stdout before a caller (or a test) has had the chance to SetOut. The
+// behaviour is otherwise Cobra's own, --no-descriptions included.
+func writeAtRunTime(root, completion *cobra.Command) {
+	for _, c := range completion.Commands() {
+		shell := c.Name()
+		switch shell {
+		case "bash", "zsh", "fish", "powershell":
+		default:
+			continue
+		}
+		c.RunE = func(cmd *cobra.Command, args []string) error {
+			noDesc, _ := cmd.Flags().GetBool("no-descriptions")
+			out := cmd.OutOrStdout()
+			switch shell {
+			case "bash":
+				return root.GenBashCompletionV2(out, !noDesc)
+			case "zsh":
+				if noDesc {
+					return root.GenZshCompletionNoDesc(out)
+				}
+				return root.GenZshCompletion(out)
+			case "fish":
+				return root.GenFishCompletion(out, !noDesc)
+			default:
+				if noDesc {
+					return root.GenPowerShellCompletion(out)
+				}
+				return root.GenPowerShellCompletionWithDesc(out)
+			}
+		}
+		c.Run = nil
+	}
 }
