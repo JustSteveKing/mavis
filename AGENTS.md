@@ -231,6 +231,14 @@ alone. `TestNoBackgroundQuery` in package main runs the built binary in a
 pty (creack/pty, test-only) and fails if the query goes out or startup takes
 seconds; removing the import makes it fail at 4s. Measured: 5.03s to 0.02s.
 
+**`init --from <url>` clones a records repository** for another machine:
+the target must be new or empty, checked before cloning, and git's own
+credentials do the access. A folder that is the root of a repository
+already holding records (`hasRecords` against the layout) is recognised as
+a records repository and not asked about, which also covers a hand-made
+clone. Config stays per machine; a clone with no records where the layout
+expects them warns, since that usually means a custom layout not copied.
+
 **`init` is git-aware.** A new or empty folder gets `git init` (never a
 commit). A folder inside an existing repository is confirmed first with a
 huh prompt naming the repository, louder if it holds code (`manifest`);

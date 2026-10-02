@@ -93,6 +93,21 @@ yours. A folder already inside a git repository is asked about first,
 since that repository will track the records, with a louder warning if it
 holds code. Answer with `--yes` where there is no terminal to ask on.
 
+### Another machine
+
+Once your records are in a repository with a remote, a second machine
+starts from it:
+
+```bash
+mavis init ~/business --from git@github.com:you/business.git
+```
+
+That clones the records with your usual git access and points mavis at
+them. Cloning by hand and running `mavis init` in the clone works too.
+Keeping the machines in step is `git pull` and `git push`; mavis never
+does either. Your config is per machine, so copy `business:` and any
+custom `layout:` from the first machine's `~/.config/mavis/config.yaml`.
+
 ```bash
 mavis client add acme --name "Acme Ltd" --contact "Jo Bloggs" --email jo@acme.test
 mavis engagement add acme reporting --title "Reporting module" --basis day --rate 650

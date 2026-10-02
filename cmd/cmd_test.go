@@ -698,3 +698,62 @@ func TestCompletionScriptsFollowSetOut(t *testing.T) {
 		}
 	}
 }
+
+func TestInitFromAnotherMachine(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("MAVIS_ROOT", "")
+	for k, v := range map[string]string{"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"} {
+		t.Setenv(k, v)
+	}
+	git := func(dir string, args ...string) {
+		t.Helper()
+		if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+
+	// Machine one: records, committed.
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	one := t.TempDir() + "/business"
+	mustRun(t, "init", one)
+	mustRun(t, "client", "add", "acme", "--name", "Acme Ltd")
+	git(one, "add", "-A")
+	git(one, "commit", "-q", "-m", "records")
+
+	// Machine two: a fresh config, and --from.
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	two := t.TempDir() + "/business"
+	out := mustRun(t, "init", two, "--from", one)
+	if !strings.Contains(out, "Cloned from "+one) {
+		t.Fatalf("init --from:\n%s", out)
+	}
+	if out := mustRun(t, "client", "list"); !strings.Contains(out, "Acme Ltd") {
+		t.Fatalf("the cloned client should be there:\n%s", out)
+	}
+
+	// Never clones into a folder that already has files.
+	busy := t.TempDir()
+	os.WriteFile(busy+"/notes.txt", []byte("mine"), 0o644)
+	if _, err := run(t, "init", "--force", busy, "--from", one); err == nil || !strings.Contains(err.Error(), "already has files") {
+		t.Fatalf("non-empty target: %v", err)
+	}
+	if _, err := os.Stat(busy + "/clients"); err == nil {
+		t.Fatal("nothing should have been cloned")
+	}
+
+	// A clone made by hand is a records repository: no prompt, no --yes.
+	manual := t.TempDir() + "/business"
+	if out, err := exec.Command("git", "clone", "-q", one, manual).CombinedOutput(); err != nil {
+		t.Fatalf("clone: %v\n%s", err, out)
+	}
+	out = mustRun(t, "init", "--force", manual)
+	if !strings.Contains(out, "A records repository already") {
+		t.Fatalf("a hand-made clone:\n%s", out)
+	}
+	if _, err := os.Stat(manual + "/.git/.git"); err == nil {
+		t.Fatal("no nested repository")
+	}
+}
