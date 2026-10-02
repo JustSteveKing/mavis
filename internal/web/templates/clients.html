@@ -10,7 +10,7 @@
   <tbody>
   {{- range .Rows}}
   <tr>
-    <td><a href="/clients/{{pathq .Client.Slug}}">{{.Client.Name}}</a></td>
+    <td><a class="with-avatar" href="/clients/{{pathq .Client.Slug}}"><span class="avatar" aria-hidden="true">{{initials .Client.Name}}</span>{{.Client.Name}}</a></td>
     <td>{{.Client.Contact}}{{if .Client.Email}} <a href="mailto:{{.Client.Email}}" class="muted">{{.Client.Email}}</a>{{end}}</td>
     <td>{{if .LastContact}}{{day .LastContact}} <span class="muted">{{rel .LastContact}}</span>{{else}}<span class="muted">never</span>{{end}}</td>
     <td class="num">{{or .Active "-"}}</td>

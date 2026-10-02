@@ -1,10 +1,14 @@
 {{define "content"}}
 {{- $d := .Data}}{{$c := $d.C}}
 <p class="crumbs"><a href="/clients/">Clients</a></p>
-<h1>{{$c.Name}} {{template "status" $c.Status}}</h1>
+<header class="page-head with-avatar">
+  <span class="avatar avatar-lg" aria-hidden="true">{{initials $c.Name}}</span>
+  <div>
+    <h1>{{$c.Name}} {{template "status" $c.Status}}</h1>
+    {{- if $c.Contact}}<p class="sub">{{$c.Contact}}{{if $c.Email}} · <a href="mailto:{{$c.Email}}">{{$c.Email}}</a>{{end}}</p>{{end}}
+  </div>
+</header>
 <dl class="facts">
-  {{- if $c.Contact}}<dt>Contact</dt><dd>{{$c.Contact}}</dd>{{end}}
-  {{- if $c.Email}}<dt>Email</dt><dd><a href="mailto:{{$c.Email}}">{{$c.Email}}</a></dd>{{end}}
   {{- if $c.Phone}}<dt>Phone</dt><dd>{{$c.Phone}}</dd>{{end}}
   {{- if $c.StatusSince}}<dt>Status since</dt><dd>{{$c.StatusSince}} <span class="muted">{{rel $c.StatusSince}}</span></dd>{{end}}
   <dt>Terms</dt><dd>{{$c.TermsDays}} days, {{$c.Currency}}</dd>

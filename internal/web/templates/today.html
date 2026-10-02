@@ -1,6 +1,18 @@
 {{define "content"}}
 {{- $d := .Data}}{{$t := $d.T}}{{$rec := $d.Rec}}
-<h1>Today <span class="muted">{{$t.Date}}</span></h1>
+<header class="page-head">
+  <h1>Today</h1>
+  <p class="sub">{{$t.Date}}</p>
+</header>
+<div class="tiles">
+  {{- range $d.Tiles}}
+  <a class="tile{{if .Alert}} tile-alert{{end}}" href="{{.Href}}">
+    <span class="tile-label">{{.Label}}</span>
+    <span class="tile-value">{{.Value}}</span>
+    <span class="tile-note">{{.Note}}</span>
+  </a>
+  {{- end}}
+</div>
 {{- if $d.Empty}}<p class="quiet">Nothing needs you. No follow-ups, invoices, quotes or active work.</p>{{end}}
 
 {{- if $d.Unpaid}}

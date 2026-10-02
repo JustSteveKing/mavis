@@ -10,7 +10,8 @@
 <body>
 <a class="skip" href="#main">Skip to content</a>
 <header class="top">
-  <a class="brand" href="/">mavis</a>
+  <div class="top-inner">
+  <a class="brand" href="/"><span class="mark" aria-hidden="true">m</span>mavis</a>
   <nav aria-label="Records">
     <ul>
       {{- $s := .Section}}
@@ -19,6 +20,7 @@
       {{- end}}
     </ul>
   </nav>
+  </div>
 </header>
 <main id="main">
   {{- if .Problems}}
@@ -30,7 +32,7 @@
   {{template "content" .}}
 </main>
 <footer class="foot">
-  <p>Read-only view of <code>{{.Root}}</code>, as of {{.Today}}. Reload to see changes. Edit with the CLI, <code>mavis tui</code> or your editor.</p>
+  <p><span class="dot" aria-hidden="true"></span> Read-only view of <code>{{.Root}}</code>, as of {{.Today}}. Reload to see changes; edit with the CLI, <code>mavis tui</code> or your editor.</p>
 </footer>
 </body>
 </html>

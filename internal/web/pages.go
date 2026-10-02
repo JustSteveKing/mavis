@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"html/template"
+	"maps"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -11,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/JustSteveKing/mavis/internal/duration"
 	"github.com/JustSteveKing/mavis/internal/money"
@@ -57,6 +59,7 @@ func (srv *server) funcs() template.FuncMap {
 			return map[string]any{"Label": label, "Rows": rows}
 		},
 		"navItems": func() []navItem { return nav },
+		"initials": initials,
 	}
 }
 
@@ -253,6 +256,7 @@ func (srv *server) todayPage(w http.ResponseWriter, r *http.Request) {
 		Section:  "today",
 		Problems: problems,
 		Data: map[string]any{
+			"Tiles":  srv.tiles(t, rec),
 			"T":      t,
 			"Unpaid": unpaid,
 			"Rec":    rec,
@@ -260,6 +264,73 @@ func (srv *server) todayPage(w http.ResponseWriter, r *http.Request) {
 				len(t.Engagements)+len(t.Moves)+len(t.KeepInTouch) == 0,
 		},
 	})
+}
+
+// tile is one of the figures across the top of today.
+type tile struct {
+	Label, Value, Note, Href string
+	Alert                    bool
+}
+
+func (srv *server) tiles(t store.Today, rec *records) []tile {
+	owed := map[string]money.Pence{}
+	for _, inv := range t.Unpaid {
+		owed[inv.Currency] += inv.Balance
+	}
+	quoted := map[string]money.Pence{}
+	for _, q := range t.Quotes {
+		quoted[q.Currency] += q.Total
+	}
+	month := srv.date()[:7]
+	minutes := 0
+	for _, e := range rec.time {
+		if e.Date[:7] == month {
+			minutes += e.Minutes
+		}
+	}
+	timeValue := "-"
+	if minutes > 0 {
+		timeValue = duration.Days(minutes, srv.s.DayMinutes)
+	}
+	return []tile{
+		{"Overdue", sums(owed), plural(len(t.Unpaid), "invoice", "invoices") + " past due", "/invoices/", len(t.Unpaid) > 0},
+		{"Follow-ups", fmt.Sprint(len(t.Overdue) + len(t.ThisWeek)), fmt.Sprintf("%d overdue, %d this week", len(t.Overdue), len(t.ThisWeek)), "/follow-ups/", len(t.Overdue) > 0},
+		{"Quotes waiting", sums(quoted), plural(len(t.Quotes), "quote", "quotes") + " out", "/quotes/", false},
+		{"Time this month", timeValue, monthName(month), "/time/", false},
+	}
+}
+
+// sums writes amounts in several currencies as one figure.
+func sums(by map[string]money.Pence) string {
+	if len(by) == 0 {
+		return "-"
+	}
+	var parts []string
+	for _, c := range slices.Sorted(maps.Keys(by)) {
+		parts = append(parts, amount(by[c], c))
+	}
+	return strings.Join(parts, " + ")
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return "1 " + one
+	}
+	return fmt.Sprintf("%d %s", n, many)
+}
+
+// initials are the letters on a client's avatar.
+func initials(name string) string {
+	var out []rune
+	for _, w := range strings.Fields(name) {
+		if r := []rune(w)[0]; unicode.IsLetter(r) || unicode.IsDigit(r) {
+			out = append(out, unicode.ToUpper(r))
+		}
+		if len(out) == 2 {
+			break
+		}
+	}
+	return string(out)
 }
 
 type clientRow struct {
