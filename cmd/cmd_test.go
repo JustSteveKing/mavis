@@ -638,3 +638,51 @@ func TestInitAndGit(t *testing.T) {
 		t.Fatal("no nested repository inside an existing one")
 	}
 }
+
+func TestCompletionInstall(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", home+"/data")
+	t.Setenv("XDG_CONFIG_HOME", home+"/config")
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("PATH", "/nonexistent") // no zsh to ask, wherever this runs
+
+	out := mustRun(t, "completion", "install", "bash")
+	path := home + "/data/bash-completion/completions/mavis"
+	if !strings.HasPrefix(out, "Installed bash completions to "+path) {
+		t.Fatalf("bash: %q", out)
+	}
+	if data, _ := os.ReadFile(path); !strings.Contains(string(data), "__complete") {
+		t.Fatal("not a bash completion script")
+	}
+
+	mustRun(t, "completion", "install", "fish")
+	if _, err := os.Stat(home + "/config/fish/completions/mavis.fish"); err != nil {
+		t.Fatal(err)
+	}
+
+	// zsh with the folder not on its fpath: says what to add and leaves
+	// ~/.zshrc alone without a terminal, adds it with --yes.
+	out = mustRun(t, "completion", "install", "zsh")
+	if !strings.Contains(out, "is not on zsh's fpath") || !strings.Contains(out, "fpath=("+home+"/data/zsh/site-functions $fpath)") {
+		t.Fatalf("zsh: %q", out)
+	}
+	if _, err := os.Stat(home + "/.zshrc"); err == nil {
+		t.Fatal("~/.zshrc must not be touched without --yes")
+	}
+	mustRun(t, "completion", "install", "zsh", "--yes")
+	if rc, _ := os.ReadFile(home + "/.zshrc"); !strings.Contains(string(rc), "# Added by mavis completion install") {
+		t.Fatalf(".zshrc: %q", rc)
+	}
+
+	if out := mustRun(t, "completion", "uninstall", "bash"); !strings.HasPrefix(out, "Removed "+path) {
+		t.Fatalf("uninstall: %q", out)
+	}
+	if out := mustRun(t, "completion", "uninstall", "bash"); !strings.Contains(out, "No bash completions installed") {
+		t.Fatalf("uninstall twice: %q", out)
+	}
+	t.Setenv("SHELL", "/bin/tcsh")
+	if _, err := run(t, "completion", "install"); err == nil || !strings.Contains(err.Error(), "name it") {
+		t.Fatalf("unknown shell: %v", err)
+	}
+}

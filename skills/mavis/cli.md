@@ -60,3 +60,4 @@ them unless the user tells you to.
 |---|---|
 | `mavis init <dir>` | Create a records folder; asks first inside an existing git repository |
 | `mavis mcp` | The MCP server, on stdio, started by the agent's client |
+| `mavis completion install [bash\|zsh\|fish]` | Install tab completion where the shell loads it |

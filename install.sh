@@ -516,4 +516,5 @@ info "Point it at a folder for your records, then see what needs you:"
 info "  ${BOLD}${BIN_NAME} init ~/business${NO_COLOR}"
 info "  ${BOLD}${BIN_NAME} today${NO_COLOR}"
 info "${BOLD}${BIN_NAME} tui${NO_COLOR} opens the interactive view; ${BOLD}${BIN_NAME} --help${NO_COLOR} lists the rest."
+info "${BOLD}${BIN_NAME} completion install${NO_COLOR} sets up tab completion for your shell."
 printf '\n'

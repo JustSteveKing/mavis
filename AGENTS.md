@@ -262,6 +262,14 @@ locally. The skill names commands and tools: when either changes, update
 `mavis --help` and the server's tool names when written. It was tested by
 loading it with `claude -p --plugin-dir .` against a sandbox.
 
+**`completion install` exists because Cobra's `completion <shell>` only
+prints.** It is attached to Cobra's own completion command
+(`InitDefaultCompletionCmd`), writes to the folder each shell loads from
+(bash-completion's user dir, a zsh site-functions dir, fish's completions
+dir, all under XDG), and only edits `~/.zshrc` with a yes, asking zsh
+itself whether the folder is on its fpath. Verified by having a real
+interactive bash lazy-load it and complete `mavis inv` to `invoice`.
+
 **Invoice numbers are derived** from existing files (`nextNumber`), per year
 of the issue date, under the store lock. There is no counter. A gap would
 need a deleted issued invoice, and issued invoices cannot be discarded.

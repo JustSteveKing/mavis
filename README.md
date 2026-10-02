@@ -63,6 +63,19 @@ cd mavis && ./install.sh
 A source build reports a commit from `mavis --version` and a downloaded one
 reports its release, which is how you tell which you are running.
 
+For tab completion:
+
+```bash
+mavis completion install
+```
+
+It works out your shell from `$SHELL` (or name it: `bash`, `zsh`, `fish`)
+and writes the script where that shell loads completions from, so there is
+nothing to source by hand. bash needs bash-completion installed. zsh needs
+the folder on its `fpath`; if it is not, mavis asks before adding it to
+`~/.zshrc`. `mavis completion uninstall` takes it away again, and running
+install after an upgrade refreshes it.
+
 To try it without touching anything of yours, `make sandbox` seeds a
 throwaway folder with sample clients, time, an invoice and a quote, using
 its own config, and prints the line to point your shell at it.
