@@ -113,7 +113,7 @@ type model struct {
 
 	form       *huh.Form
 	formTitle  string
-	formSubmit func() (string, error)
+	formSubmit func() (outcome, error)
 
 	// The store, as of the last load.
 	today       store.Today
@@ -500,4 +500,14 @@ func monthName(month string) string {
 		return month
 	}
 	return t.Format("January 2006")
+}
+
+// selectWhere moves the cursor to the first row matching.
+func (m *model) selectWhere(match func(row) bool) {
+	for i, r := range m.rows {
+		if r.selectable() && match(r) {
+			m.cursor[m.view] = i
+			return
+		}
+	}
 }

@@ -202,7 +202,14 @@ copies the model on every update. Every message goes to an open form, not
 only keys, since huh advances on its own messages; the tests' `drive` loop
 runs commands and feeds their messages back for the same reason. Fields
 validate with the CLI's own parsers. A form's errors are echoed in the
-status line, because a short terminal can clip them, which it did. Rows are `cells`, aligned across the view
+status line, because a short terminal can clip them, which it did.
+`openForm` sends the form a window size on opening, sized to the detail
+pane (`formSize`), not the terminal: huh measures only on that message, so
+without it a wrapping description pushed the input off the bottom, and
+given the whole screen it never scrolled. A submit returns an `outcome`
+(status, and `then` to run after reload, e.g. landing the cursor on a new
+record) instead of setting anything on the model, because it closes over a
+copy taken when the form opened. Rows are `cells`, aligned across the view
 by `columnWidths`/`alignCells` with a cap, and dates go through `rel`.
 
 **`internal/tui` follows taskgo's TUI**: lazygit-style panels, the 16

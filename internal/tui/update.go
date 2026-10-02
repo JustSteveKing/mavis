@@ -16,7 +16,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if ws, ok := msg.(tea.WindowSizeMsg); ok {
+			// The form gets the pane's size, not the terminal's.
 			m.width, m.height = ws.Width, ws.Height
+			w, h := m.formSize()
+			msg = tea.WindowSizeMsg{Width: w, Height: h}
 		}
 		return m.updateForm(msg)
 	}
@@ -68,6 +71,9 @@ func (m model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.say("Reloaded")
 	}
 
+	if msg.String() == "c" {
+		return m.startNewClient()
+	}
 	if m.focus == focusViews {
 		switch msg.String() {
 		case "j", "down":
@@ -103,6 +109,12 @@ func (m model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.startCall()
 	case "m":
 		return m.startMove()
+	case "c":
+		return m.startNewClient()
+	case "e":
+		return m.startNewEngagement()
+	case "i":
+		return m.startDraftInvoice()
 	}
 	return m, nil
 }

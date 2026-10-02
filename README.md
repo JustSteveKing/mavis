@@ -478,6 +478,9 @@ Obsidian, appears on its own. It never reloads while you are typing.
 
 Most of a working day can happen there:
 
+- `c` adds a client, suggesting a slug from the name as you type
+- `e` adds an engagement to the selected client
+- `i` drafts an invoice for the selected client, last month by default
 - `l` logs a call, meeting or email, with a follow-up and its due date
 - `t` logs time to one of the client's engagements
 - `n` adds a quick note
@@ -486,7 +489,9 @@ Most of a working day can happen there:
 - `p` marks an invoice paid, after a y/n
 - `r` previews the next payment reminder
 
-Calls, time, notes and moves open a small form in the detail pane, built
+These go through the same code as the CLI, so a client added here is the
+same file `mavis client add` would write, with the same checks. Every one
+opens a small form in the detail pane, built
 with [huh](https://github.com/charmbracelet/huh). Each field checks what
 you type as you go, with the same rules as the CLI, so a duration mavis
 cannot read is caught in the form, with the reason under it and in the

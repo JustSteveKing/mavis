@@ -19,15 +19,38 @@ import (
 // model: Bubble Tea copies the model on every update, and a form bound to
 // the model's own fields would write into a copy that is thrown away.
 
+// outcome is what a completed form did: a status for the status line, and
+// optionally something to do once the model has reloaded, such as landing
+// the cursor on the record just made. It is returned rather than set on the
+// model, because submit closes over a copy of the model taken when the form
+// opened, and anything it set there would be lost.
+type outcome struct {
+	status string
+	then   func(*model)
+}
+
+func done(status string) outcome { return outcome{status: status} }
+
 // openForm shows a form. submit runs once it is completed; its status, or
 // its error, goes to the status line.
-func (m model) openForm(title string, f *huh.Form, submit func() (string, error)) (tea.Model, tea.Cmd) {
+func (m model) openForm(title string, f *huh.Form, submit func() (outcome, error)) (tea.Model, tea.Cmd) {
 	keys := huh.NewDefaultKeyMap()
 	keys.Quit = key.NewBinding(key.WithKeys("esc", "ctrl+c"), key.WithHelp("esc", "cancel"))
-	f = f.WithTheme(huh.ThemeBase16()).WithKeyMap(keys).WithShowHelp(true).WithWidth(max(m.width-sideWidth-6, 30))
+	f = f.WithTheme(huh.ThemeBase16()).WithKeyMap(keys).WithShowHelp(true)
 	m.form, m.formTitle, m.formSubmit = f, title, submit
 	m.mode = modeForm
-	return m, f.Init()
+	init := f.Init()
+	// huh only measures itself on a window size message, and the TUI gets
+	// one only when the terminal is resized. Without this, a form whose
+	// description wraps is measured short and its input line falls off the
+	// bottom. It is given the pane's size, not the terminal's: told it has
+	// the whole screen, it never scrolls, and fields below the pane vanish.
+	w, h := m.formSize()
+	next, sized := f.Update(tea.WindowSizeMsg{Width: w, Height: h})
+	if nf, ok := next.(*huh.Form); ok {
+		m.form = nf
+	}
+	return m, tea.Batch(init, sized)
 }
 
 // updateForm hands every message to the open form, not only keys: huh moves
@@ -44,12 +67,15 @@ func (m model) updateForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case huh.StateCompleted:
 		submit := m.formSubmit
 		m.mode, m.form, m.formSubmit = modeNormal, nil, nil
-		status, err := submit()
+		out, err := submit()
 		if err != nil {
 			return m.say(err.Error())
 		}
 		m.reload()
-		return m.say(status)
+		if out.then != nil {
+			out.then(&m)
+		}
+		return m.say(out.status)
 	}
 	return m, cmd
 }
@@ -96,16 +122,16 @@ func (m model) startTime() (tea.Model, tea.Cmd) {
 				return err
 			}),
 	))
-	return m.openForm("Log time for "+r.client, f, func() (string, error) {
+	return m.openForm("Log time for "+r.client, f, func() (outcome, error) {
 		e, err := m.s.AddTime(store.NewTime{Engagement: v.engagement, Duration: v.duration, What: v.what, Date: v.date})
 		if err != nil {
-			return "", err
+			return outcome{}, err
 		}
 		status := fmt.Sprintf("Logged %s to %s on %s", e.Time, e.Engagement, e.Date)
 		if by, err := m.s.InvoiceCovering(e.Engagement, e.Date[:7]); err == nil && by != "" {
 			status += "; that month is already on " + by + ", so this is not"
 		}
-		return status, nil
+		return done(status), nil
 	})
 }
 
@@ -134,20 +160,20 @@ func (m model) startCall() (tea.Model, tea.Cmd) {
 				return err
 			}),
 	))
-	return m.openForm("Log for "+client, f, func() (string, error) {
+	return m.openForm("Log for "+client, f, func() (outcome, error) {
 		nl := store.NewLog{Kind: v.kind, Client: client, Summary: strings.TrimSpace(v.summary)}
 		if fu := strings.TrimSpace(v.followUp); fu != "" {
 			nl.FollowUps = []store.NewFollowUp{{Text: fu, Due: strings.TrimSpace(v.due)}}
 		}
 		l, err := m.s.AddLog(nl)
 		if err != nil {
-			return "", err
+			return outcome{}, err
 		}
 		status := "Logged " + l.Kind + " with " + client
 		if len(l.FollowUps) > 0 {
 			status += ", follow-up: " + l.FollowUps[0].Text
 		}
-		return status, nil
+		return done(status), nil
 	})
 }
 
@@ -163,11 +189,11 @@ func (m model) startNote() (tea.Model, tea.Cmd) {
 	f := huh.NewForm(huh.NewGroup(
 		huh.NewInput().Title("Note for " + client).Value(&v.text).Validate(required("A note")),
 	))
-	return m.openForm("Note", f, func() (string, error) {
+	return m.openForm("Note", f, func() (outcome, error) {
 		if _, err := m.s.AddLog(store.NewLog{Kind: "note", Client: client, Summary: strings.TrimSpace(v.text)}); err != nil {
-			return "", err
+			return outcome{}, err
 		}
-		return "Noted against " + client, nil
+		return done("Noted against " + client), nil
 	})
 }
 
@@ -189,15 +215,15 @@ func (m model) startMove() (tea.Model, tea.Cmd) {
 		huh.NewSelect[string]().Title("Move " + client + " to").
 			Options(huh.NewOptions("active", "warm", "cold", "prospect")...).Value(&v.status),
 	))
-	return m.openForm("Move", f, func() (string, error) {
+	return m.openForm("Move", f, func() (outcome, error) {
 		c, changed, err := m.s.SetClientStatus(client, v.status)
 		if err != nil {
-			return "", err
+			return outcome{}, err
 		}
 		if !changed {
-			return c.Name + " is already " + v.status, nil
+			return done(c.Name + " is already " + v.status), nil
 		}
-		return c.Name + " is now " + v.status, nil
+		return done(c.Name + " is now " + v.status), nil
 	})
 }
 
@@ -213,14 +239,14 @@ func (m model) startPaid() (tea.Model, tea.Cmd) {
 		huh.NewConfirm().Title(fmt.Sprintf("Mark %s paid today, %s?", inv.Number, gbp(inv.Balance, inv.Currency))).
 			Affirmative("Paid").Negative("Not yet").Value(&v.yes),
 	))
-	return m.openForm("Paid", f, func() (string, error) {
+	return m.openForm("Paid", f, func() (outcome, error) {
 		if !v.yes {
-			return "Left unpaid", nil
+			return done("Left unpaid"), nil
 		}
 		got, err := m.s.SetPaid(inv.Number, true, "")
 		if err != nil {
-			return "", err
+			return outcome{}, err
 		}
-		return fmt.Sprintf("%s paid on %s", got.Number, got.Paid), nil
+		return done(fmt.Sprintf("%s paid on %s", got.Number, got.Paid)), nil
 	})
 }

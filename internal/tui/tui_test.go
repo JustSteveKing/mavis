@@ -386,3 +386,72 @@ func TestColumnsAlign(t *testing.T) {
 		t.Fatalf("a long cell should be capped: %q", got)
 	}
 }
+
+func TestNewClientFromTheTUI(t *testing.T) {
+	s, m := seeded(t)
+	m = press(t, m, "c")
+	if m.mode != modeForm || m.formTitle != "New client" {
+		t.Fatalf("c should open the new client form: %v %q", m.mode, m.formTitle)
+	}
+	m = typeText(t, m, "Globex Corporation")
+	m = press(t, m, "enter")                               // to Slug, left blank
+	if !strings.Contains(m.View(), "globex-corporation") { // the suggestion shows
+		t.Fatalf("the slug should be suggested from the name:\n%s", m.View())
+	}
+	m = press(t, m, "enter", "enter") // slug, status
+	m = typeText(t, m, "Hank Scorpio")
+	m = press(t, m, "enter", "enter", "enter") // contact, email, phone
+	if m.mode != modeNormal || m.status != "Added Globex Corporation (globex-corporation)" {
+		t.Fatalf("mode %v, status %q\n%s", m.mode, m.status, m.View())
+	}
+	c, err := s.ResolveClient("globex-corporation")
+	if err != nil || c.Contact != "Hank Scorpio" || c.Status != "active" {
+		t.Fatalf("client %+v %v", c, err)
+	}
+	if m.view != viewClients || m.selected().client != "globex-corporation" {
+		t.Fatal("the cursor should land on the new client")
+	}
+
+	// A slug that is taken is refused as it is typed.
+	m = press(t, m, "c")
+	m = typeText(t, m, "Acme")
+	m = press(t, m, "enter")
+	m = typeText(t, m, "acme")
+	m = press(t, m, "enter")
+	if m.mode != modeForm || !strings.Contains(m.statusLine(), "already a client called acme") {
+		t.Fatalf("should refuse a taken slug: %q", m.statusLine())
+	}
+}
+
+func TestNewEngagementFromTheTUI(t *testing.T) {
+	s, m := seeded(t)
+	m = press(t, m, "e")
+	m = typeText(t, m, "Reporting rebuild")
+	m = press(t, m, "enter", "enter", "enter", "enter") // title, name, status, basis (day)
+	m = typeText(t, m, "650")
+	m = press(t, m, "enter", "enter", "enter") // rate, budget, start
+	if m.mode != modeNormal || m.status != "Added Reporting rebuild (acme-reporting-rebuild)" {
+		t.Fatalf("mode %v, status %q\n%s", m.mode, m.status, m.View())
+	}
+	e, err := s.ResolveEngagement("acme-reporting-rebuild")
+	if err != nil || e.Basis != "day" || e.Rate != "650.00" || e.Start != "2026-10-01" {
+		t.Fatalf("engagement %+v %v", e, err)
+	}
+}
+
+func TestDraftAnInvoiceFromTheTUI(t *testing.T) {
+	s, m := withEngagement(t)
+	s.AddTime(store.NewTime{Engagement: "acme-reporting", Duration: "2d", Date: "2026-09-10"})
+	m.reload()
+	m = press(t, m, "i")
+	if !strings.Contains(m.View(), "2026-09") {
+		t.Fatalf("last month should be the default:\n%s", m.View())
+	}
+	m = press(t, m, "enter")
+	if m.mode != modeNormal || !strings.HasPrefix(m.status, "Drafted draft-acme-2026-09: £1,560.00") {
+		t.Fatalf("status %q", m.status)
+	}
+	if m.view != viewInvoices || m.selected().invoice != "draft-acme-2026-09" {
+		t.Fatal("the cursor should land on the draft")
+	}
+}

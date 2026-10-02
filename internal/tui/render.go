@@ -23,15 +23,7 @@ func (m model) View() string {
 		return m.helpView()
 	}
 
-	body := max(m.height-2, 8) // the status line and the footer
-	listH := max(body*5/9, 5)
-	if m.mode == modeForm {
-		// The form needs the room, with its errors below its fields; the
-		// list stays as a few rows of context.
-		listH = min(listH, max(body/4, 4))
-	}
-	detailH := body - listH
-	mainW := max(m.width-sideWidth, 20)
+	body, listH, detailH, mainW := m.layout()
 
 	side := box("1 Views", sideWidth, body, m.focus == focusViews, m.viewsPanel())
 	list := box("2 "+m.view.String(), mainW, listH, m.focus == focusList, m.listPanel(listH-2, mainW-2))
@@ -41,6 +33,29 @@ func (m model) View() string {
 	// the whole layout down a line.
 	return lipgloss.JoinHorizontal(lipgloss.Top, side, main) + "\n" +
 		truncate(m.statusLine(), m.width) + "\n" + truncate(m.footer(), m.width)
+}
+
+// layout splits the screen: the body between the list and the detail pane,
+// and the width beside the Views panel.
+func (m model) layout() (body, listH, detailH, mainW int) {
+	body = max(m.height-2, 8) // the status line and the footer
+	listH = max(body*5/9, 5)
+	if m.mode == modeForm {
+		// The form needs the room, with its errors below its fields; the
+		// list stays as a few rows of context.
+		listH = min(listH, max(body/4, 4))
+	}
+	return body, listH, body - listH, max(m.width-sideWidth, 20)
+}
+
+// formSize is the room a form has inside the detail pane, inside its border
+// and indent.
+func (m model) formSize() (int, int) {
+	saved := m.mode
+	m.mode = modeForm
+	_, _, detailH, mainW := m.layout()
+	m.mode = saved
+	return max(mainW-4, 20), max(detailH-2, 3)
 }
 
 func (m model) viewsPanel() string {
@@ -412,7 +427,7 @@ func (m model) footer() string {
 				keys = append(keys, [2]string{"x", "done"})
 			}
 			if r.client != "" {
-				keys = append(keys, [2]string{"l", "log call"}, [2]string{"t", "time"}, [2]string{"n", "note"}, [2]string{"m", "move"})
+				keys = append(keys, [2]string{"l", "log call"}, [2]string{"t", "time"}, [2]string{"n", "note"}, [2]string{"m", "move"}, [2]string{"e", "engagement"}, [2]string{"i", "invoice"})
 			}
 			if inv, ok := m.invoiceFor(r); ok && inv.Kind == "invoice" && inv.Status == "issued" {
 				keys = append(keys, [2]string{"p", "paid"})
@@ -422,7 +437,7 @@ func (m model) footer() string {
 			}
 		}
 	}
-	keys = append(keys, [2]string{"?", "help"}, [2]string{"q", "quit"})
+	keys = append(keys, [2]string{"c", "new client"}, [2]string{"?", "help"}, [2]string{"q", "quit"})
 	var parts []string
 	for _, k := range keys {
 		parts = append(parts, styleKey.Render(k[0])+" "+styleHint.Render(k[1]))
@@ -440,6 +455,9 @@ func (m model) helpView() string {
 		{"t", "log time to one of the selected client's engagements"},
 		{"n", "add a quick note to the selected client"},
 		{"m", "move the selected client: active, warm, cold or prospect"},
+		{"c", "add a new client"},
+		{"e", "add an engagement to the selected client"},
+		{"i", "draft an invoice for the selected client and a month"},
 		{"p", "mark the selected invoice paid today, after asking"},
 		{"r", "preview the next payment reminder for an overdue invoice"},
 		{"R", "reload now (it also reloads every two seconds)"},
