@@ -505,8 +505,19 @@ how much time you have logged this month.
 
 ## Agents
 
-mavis runs as an MCP server, so an agent such as Claude can keep your
-records with you:
+The repository is a Claude Code plugin. It connects the MCP server and adds
+a skill that teaches Claude the workflow: start from `today`, log calls
+with their follow-ups, prepare month-end billing, draft reminders, and
+leave everything irreversible to you. With mavis installed and on your
+PATH:
+
+```
+/plugin marketplace add JustSteveKing/mavis
+/plugin install mavis@juststeveking
+```
+
+While the repository is private, that needs git access to it, through
+`gh auth login` or an SSH key. For the MCP server alone, without the skill:
 
 ```bash
 claude mcp add mavis -- mavis mcp

@@ -1,0 +1,16 @@
+{
+  "name": "juststeveking",
+  "description": "Steve McDougall's Claude Code plugins.",
+  "owner": {
+    "name": "Steve McDougall",
+    "url": "https://github.com/JustSteveKing"
+  },
+  "plugins": [
+    {
+      "name": "mavis",
+      "source": "./",
+      "description": "Keep a freelancer's business records with mavis, from Claude Code.",
+      "version": "0.1.2"
+    }
+  ]
+}

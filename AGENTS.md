@@ -250,6 +250,18 @@ folder, since records are told apart by folder as well as by `type`.
 points at; `openStore` prints it as a warning on every command. mavis never
 moves files to follow a layout change.
 
+**The repo is a Claude Code plugin and its own marketplace.**
+`.claude-plugin/plugin.json` declares the skill (`skills/mavis/`) and the
+MCP server (`mavis mcp`, so the binary must be on PATH);
+`.claude-plugin/marketplace.json` lists the plugin with `source: "./"`.
+Bump `version` in both on every release: installed plugins update by it.
+`claude plugin validate .` and `claude plugin validate
+.claude-plugin/plugin.json` check them; CI has no `claude`, so run them
+locally. The skill names commands and tools: when either changes, update
+`skills/mavis/SKILL.md` and `cli.md`, which were checked against
+`mavis --help` and the server's tool names when written. It was tested by
+loading it with `claude -p --plugin-dir .` against a sandbox.
+
 **Invoice numbers are derived** from existing files (`nextNumber`), per year
 of the issue date, under the store lock. There is no counter. A gap would
 need a deleted issued invoice, and issued invoices cannot be discarded.
