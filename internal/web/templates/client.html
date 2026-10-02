@@ -1,0 +1,70 @@
+{{define "content"}}
+{{- $d := .Data}}{{$c := $d.C}}
+<p class="crumbs"><a href="/clients/">Clients</a></p>
+<h1>{{$c.Name}} {{template "status" $c.Status}}</h1>
+<dl class="facts">
+  {{- if $c.Contact}}<dt>Contact</dt><dd>{{$c.Contact}}</dd>{{end}}
+  {{- if $c.Email}}<dt>Email</dt><dd><a href="mailto:{{$c.Email}}">{{$c.Email}}</a></dd>{{end}}
+  {{- if $c.Phone}}<dt>Phone</dt><dd>{{$c.Phone}}</dd>{{end}}
+  {{- if $c.StatusSince}}<dt>Status since</dt><dd>{{$c.StatusSince}} <span class="muted">{{rel $c.StatusSince}}</span></dd>{{end}}
+  <dt>Terms</dt><dd>{{$c.TermsDays}} days, {{$c.Currency}}</dd>
+  {{- if $c.Address}}<dt>Address</dt><dd>{{join $c.Address ", "}}{{if $c.Country}}, {{$c.Country}}{{end}}</dd>{{end}}
+  {{- if $c.VATNumber}}<dt>VAT number</dt><dd>{{$c.VATNumber}}</dd>{{end}}
+  {{- if $c.PeppolID}}<dt>Peppol ID</dt><dd>{{$c.PeppolID}}</dd>{{end}}
+  {{- if $c.BuyerReference}}<dt>Buyer reference</dt><dd>{{$c.BuyerReference}}</dd>{{end}}
+  <dt>File</dt><dd><code>{{$c.Path}}</code></dd>
+</dl>
+
+{{- with $d.Body}}<section class="body">{{md .}}</section>{{end}}
+
+{{- if $d.Open}}
+<section>
+<h2>Open follow-ups</h2>
+<ul class="items">{{range $d.Open}}<li>{{template "followUp" .}}{{if .Due}} · due {{.Due}} <span class="muted">{{rel .Due}}</span>{{end}}</li>{{end}}</ul>
+</section>
+{{- end}}
+
+<section>
+<h2>Engagements</h2>
+{{- if $d.Engagements}}
+<div class="scroll">
+<table>
+  <thead><tr><th scope="col">Engagement</th><th scope="col">Status</th><th scope="col">Basis</th><th scope="col">Since</th></tr></thead>
+  <tbody>
+  {{- range $d.Engagements}}
+  <tr><td><a href="/engagements/{{pathq .Slug}}">{{.Title}}</a></td><td>{{template "status" .Status}}</td><td>{{.Basis}}{{if .Rate}} · {{.Rate}}{{end}}{{if .Budget}} · budget {{.Budget}}{{end}}</td><td>{{.Start}}</td></tr>
+  {{- end}}
+  </tbody>
+</table>
+</div>
+{{- else}}<p class="quiet">None yet.</p>{{end}}
+</section>
+
+{{- if $d.Invoices}}
+<section>
+<h2>Invoices</h2>
+<div class="scroll">
+<table>
+  <thead><tr><th scope="col">Invoice</th><th scope="col">Status</th><th scope="col">Issued</th><th scope="col">Due</th><th scope="col" class="num">Total</th><th scope="col" class="num">Owed</th></tr></thead>
+  <tbody>
+  {{- range $d.Invoices}}
+  <tr><td><a href="/invoices/{{pathq .Slug}}">{{or .Number .Slug}}</a>{{if eq .Kind "credit"}} <span class="muted">credit note</span>{{end}}</td><td>{{template "status" .Display}}</td><td>{{or .Issued "-"}}</td><td>{{or .Due "-"}}</td><td class="num">{{money .Total .Currency}}</td><td class="num">{{if .Balance}}{{money .Balance ""}}{{else}}-{{end}}</td></tr>
+  {{- end}}
+  </tbody>
+</table>
+</div>
+</section>
+{{- end}}
+
+{{- if $d.Quotes}}
+<section>
+<h2>Quotes</h2>
+<ul class="items">{{range $d.Quotes}}<li><a href="/quotes/{{pathq .Slug}}">{{or .Number .Slug}}</a> {{.Title}} {{template "status" (.Display $.Today)}} · {{money .Total .Currency}}</li>{{end}}</ul>
+</section>
+{{- end}}
+
+<section>
+<h2>History</h2>
+{{- if $d.Logs}}{{template "logRows" $d.Logs}}{{else}}<p class="quiet">Nothing logged yet.</p>{{end}}
+</section>
+{{end}}

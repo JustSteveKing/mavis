@@ -21,6 +21,7 @@ them unless the user tells you to.
 | `mavis time list [--month YYYY-MM] [--client c]` | Time for a month |
 | `mavis stats [--month YYYY-MM \| --year YYYY \| --from D --to D]` | Time, value, invoices, quotes |
 | `mavis tui` | The interactive view |
+| `mavis web [--port n] [--no-open]` | Read-only view in the browser; runs until stopped, so start it only when the user asks |
 
 ## Clients and engagements
 

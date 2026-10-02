@@ -528,6 +528,28 @@ Columns line up across each view, dates read as "in 3 days" or "12 days
 ago", and the side panel keeps a running total of what you are owed and
 how much time you have logged this month.
 
+## In the browser
+
+```bash
+mavis web
+```
+
+Opens the records in your default browser as a small site: today, clients,
+engagements, the log, follow-ups, time by month, invoices, quotes and stats,
+all linked to one another. A client's page has their details, any notes you
+keep in their file, their engagements, invoices, quotes and every call and
+note, newest first. An invoice has its lines, totals, how far it has been
+chased and its PDF. `[[wikilinks]]` in a note are links here too.
+
+It is read-only. Every page reads the files again, so reload to see a
+change made anywhere else; to change a record, use the CLI, the TUI or your
+editor.
+
+It listens on `127.0.0.1` only, on a free port unless you give `--port`,
+and answers only requests addressed to localhost, so nothing else on your
+network, and no other site open in your browser, can read your records.
+`--no-open` serves without opening a browser. Ctrl-C stops it.
+
 ## Agents
 
 The repository is a Claude Code plugin. It connects the MCP server and adds

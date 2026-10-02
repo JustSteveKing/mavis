@@ -1,0 +1,44 @@
+{{define "content"}}
+{{- $d := .Data}}{{$e := $d.E}}
+<p class="crumbs"><a href="/engagements/">Engagements</a> / <a href="/clients/{{pathq $e.Client}}">{{$d.Name}}</a></p>
+<h1>{{$e.Title}} {{template "status" $e.Status}}</h1>
+<dl class="facts">
+  <dt>Client</dt><dd><a href="/clients/{{pathq $e.Client}}">{{$d.Name}}</a></dd>
+  {{- if $e.Basis}}<dt>Basis</dt><dd>{{$e.Basis}}{{if $e.Rate}} at {{$e.Rate}}{{end}}</dd>{{end}}
+  {{- if $e.Budget}}<dt>Budget</dt><dd>{{$e.Budget}}</dd>{{end}}
+  {{- if $e.Start}}<dt>Start</dt><dd>{{$e.Start}}</dd>{{end}}
+  {{- if $e.End}}<dt>End</dt><dd>{{$e.End}}</dd>{{end}}
+  {{- if $e.Project}}<dt>Project</dt><dd>{{$e.Project}}</dd>{{end}}
+  <dt>Time logged</dt><dd>{{spent $d.Total}}</dd>
+  <dt>File</dt><dd><code>{{$e.Path}}</code></dd>
+</dl>
+
+{{- with $d.Body}}<section class="body">{{md .}}</section>{{end}}
+
+<section>
+<h2>Time</h2>
+{{- range $d.Months}}
+<h3><a href="/time/?month={{.Month}}">{{month .Month}}</a> <span class="muted">{{spent .Minutes}}</span></h3>
+<div class="scroll">
+<table>
+  <thead><tr><th scope="col">Date</th><th scope="col" class="num">Time</th><th scope="col">What</th></tr></thead>
+  <tbody>{{range .Entries}}<tr><td>{{.Date}}</td><td class="num">{{.Time}}</td><td>{{.What}}</td></tr>{{end}}</tbody>
+</table>
+</div>
+{{- else}}<p class="quiet">No time logged. <code>mavis time {{$e.Slug}} 1d "what"</code></p>{{end}}
+</section>
+
+{{- if $d.Invoices}}
+<section>
+<h2>Invoices</h2>
+<ul class="items">{{range $d.Invoices}}<li><a href="/invoices/{{pathq .Slug}}">{{or .Number .Slug}}</a> {{template "status" .Display}}{{if .Period}} · {{month .Period}}{{end}} · {{money .Total .Currency}}</li>{{end}}</ul>
+</section>
+{{- end}}
+
+{{- if $d.Logs}}
+<section>
+<h2>Log</h2>
+<ul class="timeline">{{range $d.Logs}}<li><a href="/log/{{pathq .Slug}}"><span class="when">{{when .Date}}</span> <span class="kind k-{{.Kind}}">{{.Kind}}</span></a>{{if .Summary}}<p>{{.Summary}}</p>{{end}}</li>{{end}}</ul>
+</section>
+{{- end}}
+{{end}}

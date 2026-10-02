@@ -1,0 +1,80 @@
+{{define "content"}}
+{{- $d := .Data}}{{$t := $d.T}}{{$rec := $d.Rec}}
+<h1>Today <span class="muted">{{$t.Date}}</span></h1>
+{{- if $d.Empty}}<p class="quiet">Nothing needs you. No follow-ups, invoices, quotes or active work.</p>{{end}}
+
+{{- if $d.Unpaid}}
+<section class="alert">
+<h2>Overdue invoices</h2>
+<ul class="items">
+  {{- range $d.Unpaid}}
+  <li><a href="/invoices/{{pathq .Invoice.Slug}}">{{.Invoice.Number}}</a> <a href="/clients/{{pathq .Invoice.Client}}">{{.Name}}</a> · <strong>{{money .Invoice.Balance .Invoice.Currency}}</strong> owed · due {{.Invoice.Due}} ({{rel .Invoice.Due}})<br><span class="muted">{{.Chase}}</span></li>
+  {{- end}}
+</ul>
+</section>
+{{- end}}
+
+{{- if $t.Overdue}}
+<section class="alert">
+<h2>Overdue follow-ups</h2>
+<ul class="items">
+  {{- range $t.Overdue}}<li>{{template "followUp" .}} <a href="/clients/{{pathq .Client}}" class="muted">{{$rec.ClientName .Client}}</a> · due {{.Due}} ({{rel .Due}})</li>{{end}}
+</ul>
+</section>
+{{- end}}
+
+{{- if $t.Retainers}}
+<section>
+<h2>Retainers to bill</h2>
+<ul class="items">
+  {{- range $t.Retainers}}<li><a href="/engagements/{{pathq .Engagement}}">{{.Title}}</a> <span class="muted">{{$rec.ClientName .Client}}</span> · {{month .Month}} · {{.Rate}}</li>{{end}}
+</ul>
+<p class="hint">Draft them with <code>mavis invoice retainers --draft</code></p>
+</section>
+{{- end}}
+
+{{- if $t.Quotes}}
+<section>
+<h2>Quotes waiting</h2>
+<ul class="items">
+  {{- range $t.Quotes}}<li><a href="/quotes/{{pathq .Slug}}">{{.Number}}</a> {{.Title}} <span class="muted">{{$rec.ClientName .Client}}</span> · {{money .Total .Currency}} · sent {{.Sent}} ({{rel .Sent}}){{if .ValidUntil}} · valid until {{.ValidUntil}}{{end}}{{if .Expired $t.Date}} {{template "status" "expired"}}{{end}}</li>{{end}}
+</ul>
+</section>
+{{- end}}
+
+{{- if $t.ThisWeek}}
+<section>
+<h2>Due this week</h2>
+<ul class="items">
+  {{- range $t.ThisWeek}}<li>{{template "followUp" .}} <a href="/clients/{{pathq .Client}}" class="muted">{{$rec.ClientName .Client}}</a> · due {{.Due}} ({{rel .Due}})</li>{{end}}
+</ul>
+</section>
+{{- end}}
+
+{{- if $t.Engagements}}
+<section>
+<h2>Active engagements</h2>
+<div class="scroll">
+<table>
+  <thead><tr><th scope="col">Client</th><th scope="col">Engagement</th><th scope="col">Basis</th><th scope="col">Since</th></tr></thead>
+  <tbody>
+  {{- range $t.Engagements}}
+  <tr><td><a href="/clients/{{pathq .Client}}">{{$rec.ClientName .Client}}</a></td><td><a href="/engagements/{{pathq .Slug}}">{{.Title}}</a></td><td>{{.Basis}}{{if .Rate}} · {{.Rate}}{{end}}</td><td>{{.Start}}</td></tr>
+  {{- end}}
+  </tbody>
+</table>
+</div>
+</section>
+{{- end}}
+
+{{- if or $t.Moves $t.KeepInTouch}}
+<section>
+<h2>Clients gone quiet</h2>
+<p class="hint">Suggestions only. mavis never moves a client on its own.</p>
+<ul class="items">
+  {{- range $t.Moves}}<li><a href="/clients/{{pathq .Client}}">{{.Name}}</a> {{template "status" .Status}} · {{.Reason}}{{if .Suggest}} · move to {{.Suggest}}? <code>mavis client {{.Suggest}} {{.Client}}</code>{{end}}</li>{{end}}
+  {{- range $t.KeepInTouch}}<li><a href="/clients/{{pathq .Client}}">{{.Name}}</a> {{template "status" .Status}} · {{.Reason}}</li>{{end}}
+</ul>
+</section>
+{{- end}}
+{{end}}

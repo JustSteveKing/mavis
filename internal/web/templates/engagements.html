@@ -1,0 +1,19 @@
+{{define "content"}}
+<h1>Engagements</h1>
+{{- if not .Data}}<p class="quiet">No engagements yet. Add one with <code>mavis engagement add</code>.</p>{{end}}
+{{- range .Data}}
+<section>
+<h2>{{template "status" .Label}} <span class="muted">{{len .Rows}}</span></h2>
+<div class="scroll">
+<table>
+  <thead><tr><th scope="col">Engagement</th><th scope="col">Client</th><th scope="col">Basis</th><th scope="col" class="num">Rate</th><th scope="col">Start</th><th scope="col">End</th></tr></thead>
+  <tbody>
+  {{- range .Rows}}
+  <tr><td><a href="/engagements/{{pathq .Item.Slug}}">{{.Item.Title}}</a></td><td><a href="/clients/{{pathq .Item.Client}}">{{.Name}}</a></td><td>{{.Item.Basis}}</td><td class="num">{{or .Item.Rate .Item.Budget "-"}}</td><td>{{or .Item.Start "-"}}</td><td>{{or .Item.End "-"}}</td></tr>
+  {{- end}}
+  </tbody>
+</table>
+</div>
+</section>
+{{- end}}
+{{end}}

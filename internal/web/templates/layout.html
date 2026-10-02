@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>{{.Title}} · mavis</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="top">
+  <a class="brand" href="/">mavis</a>
+  <nav aria-label="Records">
+    <ul>
+      {{- $s := .Section}}
+      {{- range $item := navItems}}
+      <li><a href="{{$item.Href}}"{{if eq $s $item.Key}} aria-current="page"{{end}}>{{$item.Label}}</a></li>
+      {{- end}}
+    </ul>
+  </nav>
+</header>
+<main id="main">
+  {{- if .Problems}}
+  <div class="problems" role="status">
+    <p><strong>Some files could not be read</strong> and are left out of this page:</p>
+    <ul>{{range .Problems}}<li><code>{{.Path}}</code>: {{.Err}}</li>{{end}}</ul>
+  </div>
+  {{- end}}
+  {{template "content" .}}
+</main>
+<footer class="foot">
+  <p>Read-only view of <code>{{.Root}}</code>, as of {{.Today}}. Reload to see changes. Edit with the CLI, <code>mavis tui</code> or your editor.</p>
+</footer>
+</body>
+</html>
+
+{{define "status"}}<span class="status s-{{.}}">{{.}}</span>{{end}}
+
+{{define "lines"}}
+<div class="scroll">
+<table class="lines">
+  <thead><tr><th scope="col">Description</th><th scope="col" class="num">Qty</th><th scope="col" class="num">Price</th><th scope="col" class="num">VAT</th><th scope="col" class="num">Amount</th></tr></thead>
+  <tbody>
+  {{- range .Lines}}
+  <tr><td>{{.Description}}</td><td class="num">{{.Quantity}}</td><td class="num">{{money .Price ""}}</td><td class="num">{{vat .VAT}}</td><td class="num">{{money .Amount ""}}</td></tr>
+  {{- end}}
+  </tbody>
+  <tfoot>
+    <tr><th scope="row" colspan="4">Net</th><td class="num">{{money .Net ""}}</td></tr>
+    {{- range .VATLines}}
+    <tr><th scope="row" colspan="4">VAT at {{vat .Rate}} on {{money .Net ""}}</th><td class="num">{{money .VAT ""}}</td></tr>
+    {{- end}}
+    <tr class="total"><th scope="row" colspan="4">Total</th><td class="num">{{money .Total .Currency}}</td></tr>
+  </tfoot>
+</table>
+</div>
+{{end}}
+
+{{define "invoiceRows"}}
+<div class="scroll">
+<table>
+  <thead><tr><th scope="col">Invoice</th><th scope="col">Client</th><th scope="col">Status</th><th scope="col">Issued</th><th scope="col">Due</th><th scope="col" class="num">Total</th><th scope="col" class="num">Owed</th></tr></thead>
+  <tbody>
+  {{- range .}}
+  <tr>
+    <td><a href="/invoices/{{pathq .Invoice.Slug}}">{{or .Invoice.Number .Invoice.Slug}}</a>{{if eq .Invoice.Kind "credit"}} <span class="muted">credit note</span>{{end}}</td>
+    <td><a href="/clients/{{pathq .Invoice.Client}}">{{.Name}}</a></td>
+    <td>{{if .Overdue}}{{template "status" "overdue"}}{{else}}{{template "status" .Invoice.Display}}{{end}}</td>
+    <td>{{or .Invoice.Issued "-"}}</td>
+    <td>{{or .Invoice.Due "-"}}</td>
+    <td class="num">{{money .Invoice.Total .Invoice.Currency}}</td>
+    <td class="num">{{if .Invoice.Balance}}{{money .Invoice.Balance ""}}{{else}}-{{end}}</td>
+  </tr>
+  {{- end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+
+{{define "logRows"}}
+<ul class="timeline">
+  {{- range .}}
+  <li>
+    <a href="/log/{{pathq .Item.Slug}}"><span class="when">{{when .Item.Date}}</span> <span class="kind k-{{.Item.Kind}}">{{.Item.Kind}}</span>{{if .Name}} {{.Name}}{{end}}</a>
+    {{- if .Item.Engagement}} <span class="muted">· {{.Also}}</span>{{end}}
+    {{- if .Item.Summary}}<p>{{.Item.Summary}}</p>{{end}}
+    {{- if .Item.FollowUps}}
+    <ul class="checks">{{range .Item.FollowUps}}<li class="{{if .Done}}done{{end}}"><span aria-hidden="true">{{if .Done}}[x]{{else}}[ ]{{end}}</span> <span class="sr">{{if .Done}}Done:{{else}}Open:{{end}}</span> {{.Text}}{{if .Due}} <span class="muted">due {{.Due}}</span>{{end}}</li>{{end}}</ul>
+    {{- end}}
+  </li>
+  {{- end}}
+</ul>
+{{end}}
+
+{{define "followUp"}}<a href="/log/{{pathq .Log}}">{{.Text}}</a>{{end}}

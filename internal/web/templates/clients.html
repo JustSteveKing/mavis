@@ -1,0 +1,25 @@
+{{define "content"}}
+<h1>Clients</h1>
+{{- if not .Data}}<p class="quiet">No clients yet. Add one with <code>mavis client add</code>.</p>{{end}}
+{{- range .Data}}
+<section>
+<h2>{{template "status" .Label}} <span class="muted">{{len .Rows}}</span></h2>
+<div class="scroll">
+<table>
+  <thead><tr><th scope="col">Client</th><th scope="col">Contact</th><th scope="col">Last contact</th><th scope="col" class="num">Active work</th><th scope="col" class="num">Open follow-ups</th></tr></thead>
+  <tbody>
+  {{- range .Rows}}
+  <tr>
+    <td><a href="/clients/{{pathq .Client.Slug}}">{{.Client.Name}}</a></td>
+    <td>{{.Client.Contact}}{{if .Client.Email}} <a href="mailto:{{.Client.Email}}" class="muted">{{.Client.Email}}</a>{{end}}</td>
+    <td>{{if .LastContact}}{{day .LastContact}} <span class="muted">{{rel .LastContact}}</span>{{else}}<span class="muted">never</span>{{end}}</td>
+    <td class="num">{{or .Active "-"}}</td>
+    <td class="num">{{or .Open "-"}}</td>
+  </tr>
+  {{- end}}
+  </tbody>
+</table>
+</div>
+</section>
+{{- end}}
+{{end}}

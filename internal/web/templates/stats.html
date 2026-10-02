@@ -1,0 +1,84 @@
+{{define "content"}}
+{{- $d := .Data}}{{$s := $d.S}}
+<h1>{{.Title}}</h1>
+<nav class="pager" aria-label="Periods">
+  <a href="/stats/?{{$d.Prev}}" rel="prev">&larr; {{$d.PrevName}}</a>
+  <a href="/stats/?{{$d.Next}}" rel="next">{{$d.NextName}} &rarr;</a>
+  <a href="/stats/?year={{$d.Year}}">All of {{$d.Year}}</a>
+  <a href="/time/?month={{$d.Month}}">Time for {{month $d.Month}}</a>
+</nav>
+<p class="hint">{{$s.Period.From}} to {{$s.Period.To}}. Value is time at its rates, not revenue; revenue is what was invoiced.</p>
+
+<section>
+<h2>Time and value</h2>
+{{- if $s.Engagements}}
+<div class="scroll">
+<table>
+  <thead><tr><th scope="col">Engagement</th><th scope="col">Client</th><th scope="col">Basis</th><th scope="col" class="num">Time</th><th scope="col" class="num">Value</th><th scope="col" class="num">Per day</th></tr></thead>
+  <tbody>
+  {{- range $s.Engagements}}
+  <tr><td><a href="/engagements/{{pathq .Engagement}}">{{.Title}}</a></td><td><a href="/clients/{{pathq .Client}}">{{$d.Rec.ClientName .Client}}</a></td><td>{{.Basis}}{{if .Rate}} · {{.Rate}}{{end}}</td><td class="num">{{spent .Minutes}}</td><td class="num">{{moneyp .Value}}</td><td class="num">{{moneyp .PerDay}}</td></tr>
+  {{- end}}
+  </tbody>
+  <tfoot>
+  {{- range $s.Totals}}
+  <tr class="total"><th scope="row" colspan="3">Total {{.Currency}}</th><td class="num">{{spent .Minutes}}</td><td class="num">{{money .Value .Currency}}</td><td class="num">{{moneyp .PerDay}}</td></tr>
+  {{- end}}
+  </tfoot>
+</table>
+</div>
+{{- else}}<p class="quiet">No time or retainers in this period.</p>{{end}}
+</section>
+
+{{- if $s.Fixed}}
+<section>
+<h2>Fixed-price work</h2>
+<div class="scroll">
+<table>
+  <thead><tr><th scope="col">Engagement</th><th scope="col">Status</th><th scope="col" class="num">Budget</th><th scope="col" class="num">Time</th><th scope="col" class="num">Per day</th></tr></thead>
+  <tbody>{{range $s.Fixed}}<tr><td><a href="/engagements/{{pathq .Engagement}}">{{.Title}}</a></td><td>{{template "status" .Status}}</td><td class="num">{{money .Budget .Currency}}</td><td class="num">{{spent .Minutes}}</td><td class="num">{{moneyp .PerDay}}</td></tr>{{end}}</tbody>
+</table>
+</div>
+</section>
+{{- end}}
+
+{{- with $s.Invoicing}}
+<section>
+<h2>Invoicing</h2>
+<div class="scroll">
+<table>
+  <thead><tr><th scope="col"></th><th scope="col" class="num">Count</th><th scope="col" class="num">Net</th><th scope="col" class="num">VAT</th><th scope="col" class="num">Total</th></tr></thead>
+  <tbody>
+  {{- template "invoiceTotals" (pair "Issued" .Invoiced)}}
+  {{- template "invoiceTotals" (pair "Credited" .Credited)}}
+  {{- template "invoiceTotals" (pair "Paid" .Paid)}}
+  {{- template "invoiceTotals" (pair "Outstanding now" .Outstanding)}}
+  {{- template "invoiceTotals" (pair "Overdue now" .Overdue)}}
+  </tbody>
+</table>
+</div>
+</section>
+{{- end}}
+
+{{- with $s.Quoting}}
+<section>
+<h2>Quotes</h2>
+<div class="scroll">
+<table>
+  <thead><tr><th scope="col"></th><th scope="col" class="num">Count</th><th scope="col" class="num">Net</th></tr></thead>
+  <tbody>
+  {{- template "quoteTotals" (pair "Sent" .Sent)}}
+  {{- template "quoteTotals" (pair "Accepted" .Accepted)}}
+  {{- template "quoteTotals" (pair "Declined" .Declined)}}
+  {{- template "quoteTotals" (pair "Waiting now" .Waiting)}}
+  {{- template "quoteTotals" (pair "Expired now" .Expired)}}
+  </tbody>
+</table>
+</div>
+</section>
+{{- end}}
+{{end}}
+
+{{define "invoiceTotals"}}{{$label := .Label}}{{range .Rows}}<tr><th scope="row">{{$label}}</th><td class="num">{{.Count}}</td><td class="num">{{money .Net ""}}</td><td class="num">{{money .VAT ""}}</td><td class="num">{{money .Total .Currency}}</td></tr>{{else}}<tr><th scope="row">{{$label}}</th><td class="num">-</td><td class="num">-</td><td class="num">-</td><td class="num">-</td></tr>{{end}}{{end}}
+
+{{define "quoteTotals"}}{{$label := .Label}}{{range .Rows}}<tr><th scope="row">{{$label}}</th><td class="num">{{.Count}}</td><td class="num">{{money .Net .Currency}}</td></tr>{{else}}<tr><th scope="row">{{$label}}</th><td class="num">-</td><td class="num">-</td></tr>{{end}}{{end}}

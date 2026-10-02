@@ -1,0 +1,20 @@
+{{define "content"}}
+<h1>Follow-ups</h1>
+{{- if .Data}}
+<div class="scroll">
+<table>
+  <thead><tr><th scope="col">Follow-up</th><th scope="col">Client</th><th scope="col">Due</th></tr></thead>
+  <tbody>
+  {{- range .Data}}
+  <tr{{if and .Item.Due (lt .Item.Due $.Today)}} class="late"{{end}}>
+    <td>{{template "followUp" .Item}}</td>
+    <td><a href="/clients/{{pathq .Item.Client}}">{{.Name}}</a></td>
+    <td>{{if .Item.Due}}{{.Item.Due}} <span class="muted">{{rel .Item.Due}}</span>{{if lt .Item.Due $.Today}} {{template "status" "overdue"}}{{end}}{{else}}<span class="muted">no date</span>{{end}}</td>
+  </tr>
+  {{- end}}
+  </tbody>
+</table>
+</div>
+<p class="hint">Tick one off with <code>mavis done &lt;client&gt; &lt;words&gt;</code>, in the TUI, or in the file itself.</p>
+{{- else}}<p class="quiet">No open follow-ups.</p>{{end}}
+{{end}}

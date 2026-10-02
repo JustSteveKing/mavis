@@ -1,0 +1,15 @@
+{{define "content"}}
+{{- $d := .Data}}
+<h1>Invoices</h1>
+{{- if $d.Drafts}}
+<section>
+<h2>Drafts</h2>
+{{template "invoiceRows" $d.Drafts}}
+<p class="hint">Check a draft, then issue it with <code>mavis invoice issue &lt;draft&gt;</code>.</p>
+</section>
+{{- end}}
+<section>
+<h2>Issued</h2>
+{{- if $d.Issued}}{{template "invoiceRows" $d.Issued}}{{else}}<p class="quiet">Nothing issued yet.</p>{{end}}
+</section>
+{{end}}

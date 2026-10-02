@@ -1,0 +1,36 @@
+{{define "content"}}
+{{- $d := .Data}}
+<h1>Time <span class="muted">{{month $d.Month}}</span></h1>
+<nav class="pager" aria-label="Months">
+  <a href="/time/?month={{$d.Prev}}" rel="prev">&larr; {{month $d.Prev}}</a>
+  <a href="/time/?month={{$d.Next}}" rel="next">{{month $d.Next}} &rarr;</a>
+  <a href="/stats/?month={{$d.Month}}">Stats for {{month $d.Month}}</a>
+</nav>
+{{- if $d.Rows}}
+<section>
+<h2>By engagement <span class="muted">{{spent $d.Total}}</span></h2>
+<div class="scroll">
+<table>
+  <thead><tr><th scope="col">Client</th><th scope="col">Engagement</th><th scope="col" class="num">Time</th></tr></thead>
+  <tbody>{{range $d.Sums}}<tr><td>{{.Name}}</td><td><a href="/engagements/{{pathq .Engagement}}">{{.Title}}</a></td><td class="num">{{spent .Minutes}}</td></tr>{{end}}</tbody>
+  <tfoot><tr class="total"><th scope="row" colspan="2">Total</th><td class="num">{{spent $d.Total}}</td></tr></tfoot>
+</table>
+</div>
+</section>
+<section>
+<h2>Entries</h2>
+<div class="scroll">
+<table>
+  <thead><tr><th scope="col">Date</th><th scope="col">Client</th><th scope="col">Engagement</th><th scope="col" class="num">Time</th><th scope="col">What</th></tr></thead>
+  <tbody>{{range $d.Rows}}<tr><td>{{.Item.Date}}</td><td><a href="/clients/{{pathq .Item.Client}}">{{.Name}}</a></td><td><a href="/engagements/{{pathq .Item.Engagement}}">{{.Also}}</a></td><td class="num">{{.Item.Time}}</td><td>{{.Item.What}}</td></tr>{{end}}</tbody>
+</table>
+</div>
+</section>
+{{- else}}<p class="quiet">No time logged in {{month $d.Month}}.</p>{{end}}
+{{- if $d.Months}}
+<section>
+<h2>Months with time</h2>
+<ul class="inline">{{range $d.Months}}<li><a href="/time/?month={{.}}"{{if eq . $d.Month}} aria-current="page"{{end}}>{{month .}}</a></li>{{end}}</ul>
+</section>
+{{- end}}
+{{end}}

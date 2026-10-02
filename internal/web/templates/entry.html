@@ -1,0 +1,14 @@
+{{define "content"}}
+{{- $d := .Data}}{{$l := $d.L}}
+<p class="crumbs"><a href="/log/">Log</a> / <a href="/clients/{{pathq $l.Client}}">{{$d.Name}}</a></p>
+<h1>{{.Title}}</h1>
+<dl class="facts">
+  <dt>When</dt><dd>{{when $l.Date}} <span class="muted">{{rel $l.Date}}</span></dd>
+  <dt>Client</dt><dd><a href="/clients/{{pathq $l.Client}}">{{$d.Name}}</a></dd>
+  {{- if $l.Engagement}}<dt>Engagement</dt><dd><a href="/engagements/{{pathq $l.Engagement}}">{{$d.Engagement}}</a></dd>{{end}}
+  {{- if $l.With}}<dt>With</dt><dd>{{join $l.With ", "}}</dd>{{end}}
+  {{- if $l.Invoice}}<dt>Invoice</dt><dd><a href="/go/{{pathq $l.Invoice}}">{{$l.Invoice}}</a>{{if $l.Reminder}}, reminder {{$l.Reminder}}{{end}}</dd>{{end}}
+  <dt>File</dt><dd><code>{{$l.Path}}</code></dd>
+</dl>
+<section class="body">{{md $d.Body}}</section>
+{{end}}

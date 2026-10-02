@@ -221,6 +221,20 @@ terminal. `TestFrameFitsTheTerminal` renders at three sizes and fails on any
 line wider than the terminal or a frame of the wrong height; the footer is
 truncated rather than wrapped for that reason.
 
+**`internal/web` is read-only, and that is the design, not a gap.**
+Only `GET` routes exist (a write gets 405), and handlers call list
+functions and nothing else, reading the files on every request. Templates
+are `html/template`, embedded with the CSS; there is no JavaScript, and the
+CSP forbids it. Bodies go through goldmark with GFM, where `asText` renders
+raw HTML as escaped text rather than goldmark's default of dropping it
+(which lost the rest of a paragraph after a stray tag), and goldmark's
+non-unsafe mode drops `javascript:` links. `[[wikilinks]]` become `/go/`
+links, resolved per request against slugs and numbers. `local` refuses any
+`Host` that is not localhost, 127.0.0.1 or ::1: binding to 127.0.0.1 alone
+does not stop DNS rebinding, which reaches the port under a foreign name.
+PDFs are served by `pdf.Name` from a record found by slug, never from a
+path in the request, and without the CSP, which blocks the browser's viewer.
+
 **`internal/termquiet` exists because Bubble Tea v1 queries the terminal's
 background colour in its package `init`**, so every mavis command, not just
 the TUI, would wait out a five-second timeout on a terminal that never

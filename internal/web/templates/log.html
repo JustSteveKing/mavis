@@ -1,0 +1,26 @@
+{{define "content"}}
+{{- $d := .Data}}
+<h1>Log</h1>
+<form class="filter" method="get" action="/log/">
+  <label>Client
+    <select name="client">
+      <option value="">All clients</option>
+      {{- range $d.Clients}}<option value="{{.Slug}}"{{if eq .Slug $d.Client}} selected{{end}}>{{.Name}}</option>{{end}}
+    </select>
+  </label>
+  <label>Kind
+    <select name="kind">
+      <option value="">Everything</option>
+      {{- range $d.Kinds}}<option value="{{.}}"{{if eq . $d.Kind}} selected{{end}}>{{.}}</option>{{end}}
+    </select>
+  </label>
+  <button type="submit">Filter</button>
+  {{- if or $d.Client $d.Kind}} <a href="/log/">Clear</a>{{end}}
+</form>
+{{- range $d.Months}}
+<section>
+<h2>{{.Label}}</h2>
+{{template "logRows" .Rows}}
+</section>
+{{- else}}<p class="quiet">Nothing logged{{if or $d.Client $d.Kind}} that matches{{end}}.</p>{{end}}
+{{end}}

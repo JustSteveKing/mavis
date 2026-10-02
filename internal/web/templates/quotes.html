@@ -1,0 +1,28 @@
+{{define "content"}}
+{{- $d := .Data}}
+<h1>Quotes</h1>
+{{- if $d.Drafts}}
+<section>
+<h2>Drafts</h2>
+{{template "quoteRows" $d.Drafts}}
+<p class="hint">Send one with <code>mavis quote send &lt;draft&gt;</code>.</p>
+</section>
+{{- end}}
+<section>
+<h2>Sent</h2>
+{{- if $d.Sent}}{{template "quoteRows" $d.Sent}}{{else}}<p class="quiet">Nothing sent yet.</p>{{end}}
+</section>
+{{end}}
+
+{{define "quoteRows"}}
+<div class="scroll">
+<table>
+  <thead><tr><th scope="col">Quote</th><th scope="col">Client</th><th scope="col">Title</th><th scope="col">Status</th><th scope="col">Sent</th><th scope="col">Valid until</th><th scope="col" class="num">Total</th></tr></thead>
+  <tbody>
+  {{- range .}}
+  <tr><td><a href="/quotes/{{pathq .Quote.Slug}}">{{or .Quote.Number .Quote.Slug}}</a></td><td><a href="/clients/{{pathq .Quote.Client}}">{{.Name}}</a></td><td>{{.Quote.Title}}</td><td>{{template "status" (.Quote.Display today)}}</td><td>{{or .Quote.Sent "-"}}</td><td>{{or .Quote.ValidUntil "-"}}</td><td class="num">{{money .Quote.Total .Quote.Currency}}</td></tr>
+  {{- end}}
+  </tbody>
+</table>
+</div>
+{{end}}

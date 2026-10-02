@@ -1,0 +1,48 @@
+{{define "content"}}
+{{- $d := .Data}}{{$i := $d.I}}
+<p class="crumbs"><a href="/invoices/">Invoices</a> / <a href="/clients/{{pathq $i.Client}}">{{$d.Name}}</a></p>
+<h1>{{if eq $i.Kind "credit"}}Credit note {{end}}{{.Title}} {{if $d.Overdue}}{{template "status" "overdue"}}{{else}}{{template "status" $i.Display}}{{end}}</h1>
+{{- if $d.PDF}}<p><a class="button" href="/invoices/{{pathq $i.Slug}}/pdf">Open the PDF</a></p>{{end}}
+{{- if $d.Chase}}<p class="alert-line"><strong>{{money $i.Balance $i.Currency}} owed</strong>, due {{$i.Due}} ({{rel $i.Due}}). {{$d.Chase}}</p>{{end}}
+<dl class="facts">
+  <dt>Client</dt><dd><a href="/clients/{{pathq $i.Client}}">{{$d.Name}}</a></dd>
+  {{- if $i.Credits}}<dt>Credits</dt><dd><a href="/go/{{pathq $i.Credits}}">{{$i.Credits}}</a></dd>{{end}}
+  {{- if $i.Period}}<dt>Period</dt><dd>{{month $i.Period}}</dd>{{end}}
+  {{- if $d.Engagements}}<dt>For</dt><dd>{{range $n, $e := $d.Engagements}}{{if $n}}, {{end}}<a href="/engagements/{{pathq $e.Item}}">{{$e.Name}}</a>{{end}}</dd>{{end}}
+  {{- if $i.Created}}<dt>Drafted</dt><dd>{{$i.Created}}</dd>{{end}}
+  {{- if $i.Issued}}<dt>Issued</dt><dd>{{$i.Issued}}{{if and $i.TaxPoint (ne $i.TaxPoint $i.Issued)}}, tax point {{$i.TaxPoint}}{{end}}</dd>{{end}}
+  {{- if $i.Due}}<dt>Due</dt><dd>{{$i.Due}} <span class="muted">{{rel $i.Due}}</span></dd>{{end}}
+  {{- if $i.Paid}}<dt>Paid</dt><dd>{{$i.Paid}}</dd>{{end}}
+  {{- if $i.Credited}}<dt>Credited</dt><dd>{{money $i.Credited $i.Currency}}</dd>{{end}}
+  {{- if $i.Balance}}<dt>Owed</dt><dd><strong>{{money $i.Balance $i.Currency}}</strong></dd>{{end}}
+  {{- if $i.BuyerReference}}<dt>Buyer reference</dt><dd>{{$i.BuyerReference}}</dd>{{end}}
+  <dt>File</dt><dd><code>{{$i.Path}}</code></dd>
+</dl>
+
+{{- if $i.ToName}}
+<div class="parties">
+  <div><h2>From</h2><p>{{$i.From.Name}}{{range $i.From.Address}}<br>{{.}}{{end}}{{if $i.From.VATNumber}}<br>VAT {{$i.From.VATNumber}}{{end}}</p></div>
+  <div><h2>To</h2><p>{{$i.ToName}}{{range $i.ToAddress}}<br>{{.}}{{end}}{{if $i.ToVATNumber}}<br>VAT {{$i.ToVATNumber}}{{end}}</p></div>
+</div>
+{{- end}}
+
+<section>
+<h2>Lines</h2>
+{{template "lines" $i}}
+{{- if $i.VATNote}}<p class="hint">{{$i.VATNote}}</p>{{end}}
+</section>
+
+{{- if $d.Credits}}
+<section>
+<h2>Credit notes</h2>
+<ul class="items">{{range $d.Credits}}<li><a href="/invoices/{{pathq .Slug}}">{{or .Number .Slug}}</a> {{template "status" .Status}} · {{money .Total .Currency}}</li>{{end}}</ul>
+</section>
+{{- end}}
+
+{{- if $d.Reminders}}
+<section>
+<h2>Reminders sent</h2>
+<ul class="items">{{range $d.Reminders}}<li><a href="/log/{{pathq .Slug}}">Reminder {{.Reminder}}</a> · {{when .Date}}</li>{{end}}</ul>
+</section>
+{{- end}}
+{{end}}
