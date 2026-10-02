@@ -10,7 +10,7 @@
       "name": "mavis",
       "source": "./",
       "description": "Keep a freelancer's business records with mavis, from Claude Code.",
-      "version": "0.1.4"
+      "version": "0.1.5"
     }
   ]
 }

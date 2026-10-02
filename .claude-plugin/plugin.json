@@ -1,7 +1,7 @@
 {
   "name": "mavis",
   "displayName": "mavis",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Keep a freelancer's business records with mavis: clients, calls and follow-ups, time, quotes and invoices, as Markdown. Connects the mavis MCP server and teaches the workflow, where the agent drafts and you commit.",
   "author": {
     "name": "Steve McDougall",
