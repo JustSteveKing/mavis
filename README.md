@@ -77,6 +77,12 @@ That creates `clients/`, `engagements/`, `log/`, `time/`, `invoices/` and `quote
 remembers it as your records directory. Run it inside an Obsidian vault and
 the records become notes in it.
 
+A new or empty folder also gets `git init`, so your records can be under
+version control from the start. mavis never commits for you; that stays
+yours. A folder already inside a git repository is asked about first,
+since that repository will track the records, with a louder warning if it
+holds code. Answer with `--yes` where there is no terminal to ask on.
+
 ```bash
 mavis client add acme --name "Acme Ltd" --contact "Jo Bloggs" --email jo@acme.test
 mavis engagement add acme reporting --title "Reporting module" --basis day --rate 650
@@ -480,9 +486,11 @@ Most of a working day can happen there:
 - `p` marks an invoice paid, after a y/n
 - `r` previews the next payment reminder
 
-Calls and time open a small form in the detail pane. If something in it is
-wrong, such as a duration mavis cannot read, it says so there and keeps
-what you typed. Issuing, sending and recording reminders as sent stay at
+Calls, time, notes and moves open a small form in the detail pane, built
+with [huh](https://github.com/charmbracelet/huh). Each field checks what
+you type as you go, with the same rules as the CLI, so a duration mavis
+cannot read is caught in the form, with the reason under it and in the
+status line. Issuing, sending and recording reminders as sent stay at
 the CLI. `?` lists the keys, and the footer only offers the ones that do
 something for what is selected.
 

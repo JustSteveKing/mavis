@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"regexp"
 	"strings"
 	"testing"
@@ -590,36 +591,50 @@ func TestLayoutFromConfig(t *testing.T) {
 	}
 }
 
-func TestInitRefusesACodeProject(t *testing.T) {
+func TestInitAndGit(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	t.Setenv("MAVIS_ROOT", "")
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
 
+	// A new folder gets a repository.
+	fresh := t.TempDir() + "/business"
+	if out := mustRun(t, "init", fresh); !strings.Contains(out, "Started a git repository there") {
+		t.Fatalf("new folder:\n%s", out)
+	}
+	if _, err := os.Stat(fresh + "/.git"); err != nil {
+		t.Fatal("no repository was started")
+	}
+
+	// A folder with files in it, not a repository, is left alone.
+	used := t.TempDir()
+	os.WriteFile(used+"/notes.txt", []byte("mine"), 0o644)
+	if out := mustRun(t, "init", "--force", used); strings.Contains(out, "git") {
+		t.Fatalf("an existing folder should not get git:\n%s", out)
+	}
+	if _, err := os.Stat(used + "/.git"); err == nil {
+		t.Fatal("git init in a folder that already had files")
+	}
+
+	// Inside a repository: refused without a terminal unless --yes, and
+	// nothing is created by the refusal.
 	repo := t.TempDir()
 	os.MkdirAll(repo+"/.git", 0o755)
 	os.WriteFile(repo+"/go.mod", []byte("module example\n"), 0o644)
-
-	for _, target := range []string{repo, repo + "/records"} {
-		_, err := run(t, "init", target)
-		if err == nil || !strings.Contains(err.Error(), "looks like a code project") || !strings.Contains(err.Error(), "go.mod") {
-			t.Fatalf("init %s: %v", target, err)
-		}
-		// Refused before anything was made.
-		if _, statErr := os.Stat(repo + "/clients"); statErr == nil {
-			t.Fatalf("a refused init must create nothing")
-		}
+	_, err := run(t, "init", "--force", repo+"/records")
+	if err == nil || !strings.Contains(err.Error(), "is inside the git repository at "+repo) || !strings.Contains(err.Error(), "holds code (go.mod)") || !strings.Contains(err.Error(), "--yes") {
+		t.Fatalf("inside a repository: %v", err)
 	}
 	if _, err := os.Stat(repo + "/records"); err == nil {
-		t.Fatal("not even the folder it was pointed at")
+		t.Fatal("a refusal must create nothing")
 	}
-
-	// A vault under git, with no manifest, is fine.
-	vault := t.TempDir()
-	os.MkdirAll(vault+"/.git", 0o755)
-	mustRun(t, "init", vault)
-
-	// And --force is the way through.
-	if _, err := run(t, "init", "--force", repo+"/records"); err != nil {
-		t.Fatalf("--force: %v", err)
+	out := mustRun(t, "init", "--force", "--yes", repo+"/records")
+	if !strings.Contains(out, "Tracked by the git repository at "+repo) {
+		t.Fatalf("--yes:\n%s", out)
+	}
+	if _, err := os.Stat(repo + "/records/.git"); err == nil {
+		t.Fatal("no nested repository inside an existing one")
 	}
 }

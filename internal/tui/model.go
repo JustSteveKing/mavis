@@ -23,8 +23,8 @@ import (
 
 	"github.com/JustSteveKing/mavis/internal/money"
 	"github.com/JustSteveKing/mavis/internal/store"
-	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 )
 
 const (
@@ -63,11 +63,8 @@ const (
 type mode int
 
 const (
-	modeNormal      mode = iota
-	modeNote             // typing a note against a client
-	modeConfirmPaid      // y/n before marking an invoice paid
-	modeForm             // filling in a form: time, a call
-	modeMove             // choosing a client's new status
+	modeNormal mode = iota
+	modeForm        // a huh form is open in the detail pane
 	modeHelp
 )
 
@@ -107,7 +104,6 @@ type model struct {
 	cursor        [viewCount]int
 	rows          []row
 	mode          mode
-	input         textinput.Model
 	status        string
 	err           error
 
@@ -115,7 +111,9 @@ type model struct {
 	// preview, say.
 	detailNote string
 
-	form *form
+	form       *huh.Form
+	formTitle  string
+	formSubmit func() (string, error)
 
 	// The store, as of the last load.
 	today       store.Today
@@ -131,10 +129,7 @@ type model struct {
 
 // New returns the model for a store.
 func New(s *store.Store, o Options) tea.Model {
-	in := textinput.New()
-	in.Prompt = "note> "
-	in.CharLimit = 500
-	m := model{s: s, o: o, input: in, focus: focusList}
+	m := model{s: s, o: o, focus: focusList}
 	m.reload()
 	return m
 }

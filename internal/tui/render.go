@@ -25,6 +25,11 @@ func (m model) View() string {
 
 	body := max(m.height-2, 8) // the status line and the footer
 	listH := max(body*5/9, 5)
+	if m.mode == modeForm {
+		// The form needs the room, with its errors below its fields; the
+		// list stays as a few rows of context.
+		listH = min(listH, max(body/4, 4))
+	}
 	detailH := body - listH
 	mainW := max(m.width-sideWidth, 20)
 
@@ -183,7 +188,7 @@ func tone(t string) lipgloss.Style {
 
 func (m model) detailTitle() string {
 	if m.mode == modeForm {
-		return ""
+		return m.formTitle
 	}
 	if m.detailNote != "" {
 		return "Reminder preview"
@@ -207,7 +212,7 @@ func (m model) detailTitle() string {
 
 func (m model) detailPanel(width int) string {
 	if m.mode == modeForm && m.form != nil {
-		return indent(m.form.view(width - 2))
+		return indent(m.form.View())
 	}
 	if m.detailNote != "" {
 		return indent(m.detailNote)
@@ -370,20 +375,15 @@ func firstLine(s string) string {
 // ---------------------------------------------------------------- chrome
 
 func (m model) statusLine() string {
-	switch m.mode {
-	case modeNote:
-		return m.input.View()
-	case modeMove:
-		name := ""
-		if r := m.selected(); r != nil {
-			name = r.client
+	if m.mode == modeForm {
+		// Echoed here as well as in the form, so a short terminal that
+		// clips the form still says why it will not move on.
+		if m.form != nil {
+			if errs := m.form.Errors(); len(errs) > 0 {
+				return styleUrgent.Render(errs[0].Error())
+			}
 		}
-		return styleWarn.Render("Move "+name+" to:") + "  " + styleKey.Render("a") + " active  " + styleKey.Render("w") + " warm  " + styleKey.Render("c") + " cold  " + styleKey.Render("p") + " prospect  " + styleHint.Render("any other key cancels")
-	case modeForm:
-		return styleHint.Render("Filling in a form; the list waits until you save or cancel.")
-	case modeConfirmPaid:
-		inv, _ := m.invoiceFor(m.selected())
-		return styleWarn.Render(fmt.Sprintf("Mark %s paid today, %s? y/n", inv.Number, gbp(inv.Balance, inv.Currency)))
+		return styleHint.Render("The list waits until you save or cancel.")
 	}
 	if m.status != "" {
 		return styleAccent.Render(m.status)
@@ -395,7 +395,7 @@ func (m model) statusLine() string {
 // for the form that is open.
 func (m model) footer() string {
 	if m.mode == modeForm {
-		keys := [][2]string{{"tab", "next field"}, {"←/→", "choose"}, {"ctrl+s", "save"}, {"esc", "cancel"}}
+		keys := [][2]string{{"enter", "next / save"}, {"shift+tab", "back"}, {"esc", "cancel"}}
 		var parts []string
 		for _, k := range keys {
 			parts = append(parts, styleKey.Render(k[0])+" "+styleHint.Render(k[1]))

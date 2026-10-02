@@ -196,8 +196,13 @@ taskgo found (a custom MarshalJSON on a numeric type). The stdio runner
 returns nil on a client disconnect, as taskgo's does, for the same reason.
 `instructions.go` is what every connecting agent is told; keep it short.
 
-**TUI forms stay open on error** (`form.go`): the store's message is shown
-in the form and the input kept. Rows are `cells`, aligned across the view
+**TUI inputs are huh forms** (`forms.go`), shown in the detail pane. Values
+live in a struct allocated per form, never on the model, because Bubble Tea
+copies the model on every update. Every message goes to an open form, not
+only keys, since huh advances on its own messages; the tests' `drive` loop
+runs commands and feeds their messages back for the same reason. Fields
+validate with the CLI's own parsers. A form's errors are echoed in the
+status line, because a short terminal can clip them, which it did. Rows are `cells`, aligned across the view
 by `columnWidths`/`alignCells` with a cap, and dates go through `rel`.
 
 **`internal/tui` follows taskgo's TUI**: lazygit-style panels, the 16
@@ -219,11 +224,14 @@ alone. `TestNoBackgroundQuery` in package main runs the built binary in a
 pty (creack/pty, test-only) and fails if the query goes out or startup takes
 seconds; removing the import makes it fail at 4s. Measured: 5.03s to 0.02s.
 
-**`init` refuses a code project**, a folder with a go.mod, package.json or
-similar, or one inside such a project's git work tree, before creating
-anything; records there would be committed with the code. A plain git repo
-with no manifest (a vault) is allowed, so moving into brain stays possible.
-It happened for real: `mavis init` run inside this repo made it the root.
+**`init` is git-aware.** A new or empty folder gets `git init` (never a
+commit). A folder inside an existing repository is confirmed first with a
+huh prompt naming the repository, louder if it holds code (`manifest`);
+without a terminal it needs `--yes`. A non-empty folder that is not a repo
+is left alone. Everything is decided before anything is created. This
+replaced an earlier outright refusal of code projects, after `mavis init`
+inside this repo made it the root: some people do want records in a repo
+they already track.
 
 **Folders come from `store.Layout`, never constants.** `s.layout.Clients`
 and its siblings, `s.FilesDir()` for PDFs and XML. The constants were

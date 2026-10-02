@@ -2,6 +2,7 @@ package tui
 
 import (
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -32,22 +33,76 @@ func seeded(t *testing.T) (*store.Store, model) {
 	return s, next.(model)
 }
 
+func keyMsg(k string) tea.KeyMsg {
+	switch k {
+	case "enter":
+		return tea.KeyMsg{Type: tea.KeyEnter}
+	case "esc":
+		return tea.KeyMsg{Type: tea.KeyEsc}
+	case "tab":
+		return tea.KeyMsg{Type: tea.KeyTab}
+	case "backspace":
+		return tea.KeyMsg{Type: tea.KeyBackspace}
+	case "down":
+		return tea.KeyMsg{Type: tea.KeyDown}
+	}
+	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)}
+}
+
+// drive does what Bubble Tea's runtime would: it runs the commands an update
+// returns and feeds their messages back in. huh moves between fields with
+// messages of its own, so a form only advances like this. Commands that do
+// not return quickly (a cursor blink, the reload tick) are dropped, so no
+// test waits on a timer.
+func drive(t *testing.T, m model, msg tea.Msg) model {
+	t.Helper()
+	queue := []tea.Msg{msg}
+	for steps := 0; len(queue) > 0; steps++ {
+		if steps > 500 {
+			t.Fatal("too many messages: a loop?")
+		}
+		msg, queue = queue[0], queue[1:]
+		next, cmd := m.Update(msg)
+		m = next.(model)
+		queue = append(queue, runCmd(cmd)...)
+	}
+	return m
+}
+
+func runCmd(cmd tea.Cmd) []tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	got := make(chan tea.Msg, 1)
+	go func() { got <- cmd() }()
+	select {
+	case msg := <-got:
+		if msg == nil {
+			return nil
+		}
+		// Batches and sequences are slices of commands, whatever their type.
+		v := reflect.ValueOf(msg)
+		if v.Kind() == reflect.Slice && v.Type().Elem() == reflect.TypeOf(tea.Cmd(nil)) {
+			var out []tea.Msg
+			for i := 0; i < v.Len(); i++ {
+				out = append(out, runCmd(v.Index(i).Interface().(tea.Cmd))...)
+			}
+			return out
+		}
+		switch msg.(type) {
+		case tickMsg, clearStatusMsg:
+			return nil
+		}
+		return []tea.Msg{msg}
+	case <-time.After(30 * time.Millisecond):
+		return nil
+	}
+}
+
 func press(t *testing.T, m model, keys ...string) model {
 	t.Helper()
 	for _, k := range keys {
-		var msg tea.KeyMsg
-		switch k {
-		case "enter":
-			msg = tea.KeyMsg{Type: tea.KeyEnter}
-		case "esc":
-			msg = tea.KeyMsg{Type: tea.KeyEsc}
-		case "tab":
-			msg = tea.KeyMsg{Type: tea.KeyTab}
-		default:
-			msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)}
-		}
-		next, _ := m.Update(msg)
-		m = next.(model)
+		m = drive(t, m, keyMsg(k))
 	}
 	return m
 }
@@ -87,17 +142,15 @@ func TestTickOffAFollowUp(t *testing.T) {
 func TestAddANote(t *testing.T) {
 	s, m := seeded(t)
 	m = press(t, m, "n")
-	if m.mode != modeNote {
-		t.Fatal("n should open the note input")
+	if m.mode != modeForm || m.formTitle != "Note" {
+		t.Fatal("n should open the note form")
 	}
-	for _, r := range "Called back about the PO" {
-		m = press(t, m, string(r))
-	}
+	m = typeText(t, m, "Called back about the PO")
 	m = press(t, m, "enter")
 	logs, _, _ := s.Logs()
 	last := logs[len(logs)-1]
-	if last.Kind != "note" || last.Summary != "Called back about the PO" || last.Client != "acme" {
-		t.Fatalf("logged %+v", last)
+	if m.mode != modeNormal || last.Kind != "note" || last.Summary != "Called back about the PO" || last.Client != "acme" {
+		t.Fatalf("mode %v, logged %+v", m.mode, last)
 	}
 	data, _ := os.ReadFile(last.Path)
 	if strings.Contains(string(data), "by: agent") {
@@ -105,20 +158,25 @@ func TestAddANote(t *testing.T) {
 	}
 
 	m = press(t, m, "n", "a", "esc")
-	if m.mode != modeNormal || m.status != "Note dropped" {
-		t.Fatalf("esc should drop the note: %v %q", m.mode, m.status)
+	if m.mode != modeNormal || m.status != "Cancelled" {
+		t.Fatalf("esc should cancel: %v %q", m.mode, m.status)
+	}
+	// An empty note is refused in the form, not logged.
+	m = press(t, m, "n", "enter")
+	if m.mode != modeForm || !strings.Contains(m.View(), "A note is needed") {
+		t.Fatalf("an empty note should stay in the form:\n%s", m.View())
 	}
 }
 
 func TestMarkPaidAsksFirst(t *testing.T) {
 	s, m := seeded(t)
 	m = press(t, m, "p")
-	if m.mode != modeConfirmPaid || !strings.Contains(m.statusLine(), "Mark INV-2026-001 paid today") {
-		t.Fatalf("should ask: %q", m.statusLine())
+	if m.mode != modeForm || !strings.Contains(m.View(), "Mark INV-2026-001 paid today") {
+		t.Fatalf("should ask:\n%s", m.View())
 	}
 	m = press(t, m, "n")
-	if inv, _ := s.ResolveInvoice("INV-2026-001"); inv.Status != "issued" {
-		t.Fatal("n must leave it unpaid")
+	if inv, _ := s.ResolveInvoice("INV-2026-001"); inv.Status != "issued" || m.status != "Left unpaid" {
+		t.Fatalf("n must leave it unpaid: %s %q", inv.Status, m.status)
 	}
 	m = press(t, m, "p", "y")
 	if inv, _ := s.ResolveInvoice("INV-2026-001"); inv.Status != "paid" || inv.Paid != "2026-10-01" {
@@ -160,7 +218,7 @@ func TestAgentChangesAppearOnTheTickButNotWhileTyping(t *testing.T) {
 	s.Actor = "agent"
 	s.AddClient(store.NewClient{Slug: "globex", Name: "Globex"})
 
-	m = press(t, m, "n") // typing a note
+	m = press(t, m, "n") // a form is open
 	next, _ := m.Update(tickMsg(time.Now()))
 	m = next.(model)
 	if strings.Contains(rowsText(m), "globex") {
@@ -218,12 +276,6 @@ func typeText(t *testing.T, m model, s string) model {
 	return m
 }
 
-func ctrlS(t *testing.T, m model) model {
-	t.Helper()
-	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
-	return next.(model)
-}
-
 func withEngagement(t *testing.T) (*store.Store, model) {
 	t.Helper()
 	s, m := seeded(t)
@@ -235,28 +287,22 @@ func withEngagement(t *testing.T) (*store.Store, model) {
 func TestLogTimeFromAForm(t *testing.T) {
 	s, m := withEngagement(t)
 	m = press(t, m, "t")
-	if m.mode != modeForm || m.form.fields[0].value() != "acme-reporting" {
-		t.Fatalf("form should open on acme's engagement: %v", m.mode)
+	if m.mode != modeForm || m.formTitle != "Log time for acme" {
+		t.Fatalf("form should open: %v %q", m.mode, m.formTitle)
 	}
+	m = press(t, m, "enter") // the engagement is already acme-reporting
 
-	// A bad duration keeps the form open, says why, and keeps what was typed.
+	// A duration mavis cannot read is refused in place, input kept.
 	m = typeText(t, m, "ages")
-	m = ctrlS(t, m)
-	if m.mode != modeForm || !strings.Contains(m.form.err, "ages") {
-		t.Fatalf("a bad duration should stay in the form: mode %v, err %q", m.mode, m.form.err)
+	m = press(t, m, "enter")
+	if m.mode != modeForm || !strings.Contains(m.View(), "ages") || !strings.Contains(m.View(), "use 1d") {
+		t.Fatalf("a bad duration should stay in the form:\n%s", m.View())
 	}
-	if m.form.fields[1].value() != "ages" {
-		t.Fatal("what was typed should be kept")
-	}
-
-	for range 4 {
-		next, _ := m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
-		m = next.(model)
-	}
+	m = press(t, m, "backspace", "backspace", "backspace", "backspace")
 	m = typeText(t, m, "1h30m")
-	m = ctrlS(t, m)
+	m = press(t, m, "enter", "enter", "enter") // duration, what, date
 	if m.mode != modeNormal || !strings.HasPrefix(m.status, "Logged 1h30m to acme-reporting") {
-		t.Fatalf("mode %v, status %q", m.mode, m.status)
+		t.Fatalf("mode %v, status %q\n%s", m.mode, m.status, m.View())
 	}
 	if entries, _, _ := s.TimeEntries(); len(entries) != 1 || entries[0].Minutes != 90 {
 		t.Fatalf("entries %+v", entries)
@@ -275,15 +321,15 @@ func TestLogTimeNeedsAnEngagement(t *testing.T) {
 
 func TestLogACallWithAFollowUp(t *testing.T) {
 	s, m := seeded(t)
-	m = press(t, m, "l")
+	m = press(t, m, "l", "enter") // kind: call
 	m = typeText(t, m, "Agreed the PO")
-	m = press(t, m, "tab")
+	m = press(t, m, "enter")
 	m = typeText(t, m, "Send the contract")
-	m = press(t, m, "tab")
+	m = press(t, m, "enter")
 	m = typeText(t, m, "+2d")
-	m = press(t, m, "enter") // enter on the last field saves
+	m = press(t, m, "enter")
 	if m.mode != modeNormal || !strings.Contains(m.status, "follow-up: Send the contract") {
-		t.Fatalf("mode %v, status %q", m.mode, m.status)
+		t.Fatalf("mode %v, status %q\n%s", m.mode, m.status, m.View())
 	}
 	logs, _, _ := s.Logs()
 	last := logs[len(logs)-1]
@@ -291,14 +337,14 @@ func TestLogACallWithAFollowUp(t *testing.T) {
 		t.Fatalf("logged %+v", last)
 	}
 
-	// A due date without a follow-up is refused, in the form.
-	m = press(t, m, "l")
+	// A due date without a follow-up is refused in place.
+	m = press(t, m, "l", "enter")
 	m = typeText(t, m, "Quick chat")
-	m = press(t, m, "tab", "tab")
+	m = press(t, m, "enter", "enter")
 	m = typeText(t, m, "+1d")
-	m = ctrlS(t, m)
-	if m.mode != modeForm || !strings.Contains(m.form.err, "needs a follow-up") {
-		t.Fatalf("mode %v err %q", m.mode, m.form.err)
+	m = press(t, m, "enter")
+	if m.mode != modeForm || !strings.Contains(m.View(), "needs a follow-up") {
+		t.Fatalf("should stay in the form:\n%s", m.View())
 	}
 	if m = press(t, m, "esc"); m.mode != modeNormal || m.status != "Cancelled" {
 		t.Fatalf("esc: %v %q", m.mode, m.status)
@@ -308,15 +354,12 @@ func TestLogACallWithAFollowUp(t *testing.T) {
 func TestMoveAClient(t *testing.T) {
 	s, m := seeded(t)
 	m = press(t, m, "m")
-	if m.mode != modeMove || !strings.Contains(m.statusLine(), "Move acme to:") {
-		t.Fatalf("prompt: %q", m.statusLine())
+	if m.mode != modeForm || !strings.Contains(m.View(), "Move acme to") {
+		t.Fatalf("picker:\n%s", m.View())
 	}
-	m = press(t, m, "w")
-	if c, _ := s.ResolveClient("acme"); c.Status != "warm" {
-		t.Fatalf("status %s", c.Status)
-	}
-	if m = press(t, m, "m", "x"); m.status != "Not moved" {
-		t.Fatalf("other keys cancel: %q", m.status)
+	m = press(t, m, "down", "enter") // active, then warm
+	if c, _ := s.ResolveClient("acme"); c.Status != "warm" || m.status != "Acme Ltd is now warm" {
+		t.Fatalf("status %s, %q", c.Status, m.status)
 	}
 }
 
