@@ -215,6 +215,12 @@ alone. `TestNoBackgroundQuery` in package main runs the built binary in a
 pty (creack/pty, test-only) and fails if the query goes out or startup takes
 seconds; removing the import makes it fail at 4s. Measured: 5.03s to 0.02s.
 
+**`init` refuses a code project**, a folder with a go.mod, package.json or
+similar, or one inside such a project's git work tree, before creating
+anything; records there would be committed with the code. A plain git repo
+with no manifest (a vault) is allowed, so moving into brain stays possible.
+It happened for real: `mavis init` run inside this repo made it the root.
+
 **Folders come from `store.Layout`, never constants.** `s.layout.Clients`
 and its siblings, `s.FilesDir()` for PDFs and XML. The constants were
 removed so nothing can quietly use the old names; `pdf.Write` takes the

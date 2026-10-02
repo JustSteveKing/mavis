@@ -589,3 +589,37 @@ func TestLayoutFromConfig(t *testing.T) {
 		t.Fatalf("a bad layout should be refused: %v", err)
 	}
 }
+
+func TestInitRefusesACodeProject(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("MAVIS_ROOT", "")
+
+	repo := t.TempDir()
+	os.MkdirAll(repo+"/.git", 0o755)
+	os.WriteFile(repo+"/go.mod", []byte("module example\n"), 0o644)
+
+	for _, target := range []string{repo, repo + "/records"} {
+		_, err := run(t, "init", target)
+		if err == nil || !strings.Contains(err.Error(), "looks like a code project") || !strings.Contains(err.Error(), "go.mod") {
+			t.Fatalf("init %s: %v", target, err)
+		}
+		// Refused before anything was made.
+		if _, statErr := os.Stat(repo + "/clients"); statErr == nil {
+			t.Fatalf("a refused init must create nothing")
+		}
+	}
+	if _, err := os.Stat(repo + "/records"); err == nil {
+		t.Fatal("not even the folder it was pointed at")
+	}
+
+	// A vault under git, with no manifest, is fine.
+	vault := t.TempDir()
+	os.MkdirAll(vault+"/.git", 0o755)
+	mustRun(t, "init", vault)
+
+	// And --force is the way through.
+	if _, err := run(t, "init", "--force", repo+"/records"); err != nil {
+		t.Fatalf("--force: %v", err)
+	}
+}
