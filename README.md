@@ -60,6 +60,20 @@ cd mavis && ./install.sh
 A source build reports a commit from `mavis --version` and a downloaded one
 reports its release, which is how you tell which you are running.
 
+To update to the latest release:
+
+```bash
+mavis update            # or --check to only ask whether there is one
+```
+
+It compares your version with GitHub's latest release, downloads the
+archive for your platform, checks it against the release's `checksums.txt`
+and puts the new binary where the one you ran lives, following a symlink to
+the real file. The old binary stays until the new one is complete, so a
+failed download changes nothing. A source build is not a release, so
+`update` leaves it alone unless you pass `--force`. `mavis update` arrived
+in 0.1.5: from an earlier version, update once with the install script.
+
 For tab completion:
 
 ```bash

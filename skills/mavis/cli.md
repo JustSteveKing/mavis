@@ -61,5 +61,6 @@ them unless the user tells you to.
 |---|---|
 | `mavis init <dir>` | Create a records folder; asks first inside an existing git repository |
 | `mavis init <dir> --from <git-url>` | Set up another machine from a records repository |
+| `mavis update [--check]` | **User only** to install; `--check` says whether a newer release exists |
 | `mavis mcp` | The MCP server, on stdio, started by the agent's client |
 | `mavis completion install [bash\|zsh\|fish]` | Install tab completion where the shell loads it |

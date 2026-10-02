@@ -111,6 +111,7 @@ Every record is a file you can open, grep, diff and edit by hand.`,
 		newMCPCommand(a, version),
 		newTUICommand(a),
 		newWebCommand(a),
+		newUpdateCommand(a, version),
 	)
 	addCompletionInstall(root)
 	return root

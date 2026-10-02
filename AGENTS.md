@@ -235,6 +235,18 @@ does not stop DNS rebinding, which reaches the port under a foreign name.
 PDFs are served by `pdf.Name` from a record found by slug, never from a
 path in the request, and without the CSP, which blocks the browser's viewer.
 
+**`internal/update` replaces the running binary**, so its tests never
+reach the install step from `cmd`: that would overwrite the test binary.
+`cmd/update_test.go` swaps `newUpdateClient` for a fake GitHub and covers
+everything before the download; `internal/update` tests the download,
+checksum and `Replace` on temp files. The archive must match
+`checksums.txt` before anything is written, and `Replace` writes beside the
+target and renames, so the old binary is whole until the new one is. Only
+plain `X.Y.Z` versions are releases: `make install` stamps
+`git describe`, which `update` refuses without `--force`. The token goes to
+the API only, never to downloads. Verified for real by building a 0.1.3
+into a scratch folder and updating it through a symlink.
+
 **`internal/termquiet` exists because Bubble Tea v1 queries the terminal's
 background colour in its package `init`**, so every mavis command, not just
 the TUI, would wait out a five-second timeout on a terminal that never
