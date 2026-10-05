@@ -15,7 +15,7 @@ func newEngagementCommand(a *app) *cobra.Command {
 		Aliases: []string{"engagements", "eng"},
 		Short:   "Add, list and move pieces of work for a client",
 	}
-	cmd.AddCommand(newEngagementAddCommand(a), newEngagementListCommand(a), newEngagementShowCommand(a))
+	cmd.AddCommand(newEngagementAddCommand(a), newEngagementListCommand(a), newEngagementShowCommand(a), newEngagementRateCommand(a))
 	for _, status := range store.EngagementStatuses {
 		cmd.AddCommand(newEngagementMoveCommand(a, status))
 	}
@@ -147,6 +147,7 @@ func newEngagementShowCommand(a *app) *cobra.Command {
 				{"Client", e.Client},
 				{"Status", e.Status},
 				{"Basis", basis},
+				{"Earlier", earlierRates(e)},
 				{"Budget", e.Budget},
 				{"Start", e.Start},
 				{"End", e.End},
@@ -200,4 +201,51 @@ func basisLabel(e store.Engagement) string {
 		}
 	}
 	return basis
+}
+
+// earlierRates lists the rates an engagement had before its current one.
+func earlierRates(e store.Engagement) string {
+	var out []string
+	for _, r := range e.EarlierRates {
+		out = append(out, r.String())
+	}
+	return strings.Join(out, ", ")
+}
+
+func newEngagementRateCommand(a *app) *cobra.Command {
+	var from string
+	cmd := &cobra.Command{
+		Use:   "rate <engagement> <rate>",
+		Short: "Change an engagement's rate from a date on",
+		Long: `Sets a new rate from a date (today unless --from says otherwise) and keeps
+the old one as an earlier rate until the day before, in earlier_rates on the
+note. Time is valued, and months are invoiced, at the rate on each entry's
+own date, so a rise does not reprice work done before it.
+
+A change on or before the engagement's start replaces the rate outright.
+The history is plain text in the note, "350.00 until 2026-05-10", and can
+be written or corrected by hand.`,
+		Example: `  mavis engagement rate envolutions-kpz 380 --from 2026-05-11`,
+		Args:    cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			s, err := a.openStore()
+			if err != nil {
+				return err
+			}
+			e, err := s.ChangeRate(args[0], args[1], from)
+			if err != nil {
+				return err
+			}
+			if a.jsonOut {
+				return a.emitJSON(e)
+			}
+			a.printf("%s is now %s\n", e.Slug, basisLabel(e))
+			if h := earlierRates(e); h != "" {
+				a.printf("Earlier: %s\n", h)
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&from, "from", "", "the first day at the new rate, YYYY-MM-DD (default: today)")
+	return cmd
 }

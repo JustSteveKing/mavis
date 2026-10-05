@@ -239,3 +239,14 @@ func TestNoDraftsForClientsInvoicedElsewhere(t *testing.T) {
 		t.Fatalf("got %s", msg)
 	}
 }
+
+func TestChangeRate(t *testing.T) {
+	cs, _ := connect(t)
+	call(t, cs, "add_client", map[string]any{"slug": "env", "name": "Envolutions"}, nil)
+	call(t, cs, "add_engagement", map[string]any{"client": "env", "name": "kpz", "basis": "day", "rate": "350", "start": "2026-03-05"}, nil)
+	var e store.Engagement
+	call(t, cs, "change_rate", map[string]any{"engagement": "env-kpz", "rate": "380", "from": "2026-05-11"}, &e)
+	if e.Rate != "380.00" || len(e.EarlierRates) != 1 || e.EarlierRates[0].Until != "2026-05-10" {
+		t.Fatalf("got %+v", e)
+	}
+}

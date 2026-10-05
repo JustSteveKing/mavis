@@ -35,6 +35,7 @@ them unless the user tells you to.
 | `mavis engagement add <client> <name> --title "..." [--basis day --rate 650 --budget ... --start ...]` | Add an engagement; item work takes `--basis item --rate 750 --unit article` |
 | `mavis engagement list [--client c]` / `engagement show <e>` | Read |
 | `mavis engagement <proposed\|active\|paused\|done> <e>` | Move an engagement |
+| `mavis engagement rate <e> <rate> [--from YYYY-MM-DD]` | Change a rate from a date; the old one is kept for earlier work |
 
 ## Billing
 

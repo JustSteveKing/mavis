@@ -158,11 +158,13 @@ func (s *Store) Stats(p Period) (Stats, []Problem, error) {
 	inPeriod := map[string]int{}
 	toDate := map[string]int{}
 	items := map[string]money.Pence{}
+	worked := map[string][]TimeEntry{}
 	for _, e := range entries {
 		toDate[e.Engagement] += e.Minutes
 		if p.contains(e.Date) {
 			inPeriod[e.Engagement] += e.Minutes
 			items[e.Engagement] += e.Count
+			worked[e.Engagement] = append(worked[e.Engagement], e)
 			out.Minutes += e.Minutes
 		}
 	}
@@ -212,30 +214,14 @@ func (s *Store) Stats(p Period) (Stats, []Problem, error) {
 				st.Items = trimQty(n)
 			}
 		}
-		if rate, err := money.Parse(e.Rate); e.Rate != "" && err == nil {
-			var v money.Pence
-			ok := true
-			switch e.Basis {
-			case "day":
-				v = rate.MulDiv(int64(st.Minutes), day)
-			case "hourly":
-				v = rate.MulDiv(int64(st.Minutes), 60)
-			case "retainer":
-				v = rate.MulDiv(int64(months), 1)
-			case "item":
-				v = rate.MulDiv(int64(items[e.Slug]), 100)
-			default:
-				ok = false
+		if v, ok, err := s.value(e, worked[e.Slug], p); err != nil {
+			problems = append(problems, Problem{Path: e.Path, Err: err})
+		} else if ok {
+			st.Value = &v
+			if st.Minutes > 0 {
+				perDay := v.MulDiv(day, int64(st.Minutes))
+				st.PerDay = &perDay
 			}
-			if ok {
-				st.Value = &v
-				if st.Minutes > 0 {
-					perDay := v.MulDiv(day, int64(st.Minutes))
-					st.PerDay = &perDay
-				}
-			}
-		} else if e.Rate != "" {
-			problems = append(problems, Problem{Path: e.Path, Err: fmt.Errorf("rate: %w", err)})
 		}
 		out.Engagements = append(out.Engagements, st)
 
@@ -284,12 +270,56 @@ func (s *Store) Stats(p Period) (Stats, []Problem, error) {
 	return out, problems, nil
 }
 
+// value is what an engagement's work in a period is worth, each part at the
+// rate on its own date. ok is false for work that has no value by time:
+// fixed price, or no basis or rate.
+func (s *Store) value(e Engagement, worked []TimeEntry, p Period) (money.Pence, bool, error) {
+	if e.Rate == "" {
+		return 0, false, nil
+	}
+	if _, err := money.Parse(e.Rate); err != nil {
+		return 0, false, fmt.Errorf("rate: %w", err)
+	}
+	var v money.Pence
+	switch e.Basis {
+	case "day", "hourly", "item":
+		groups, err := groupByRate(e, worked)
+		if err != nil {
+			return 0, false, err
+		}
+		for _, g := range groups {
+			switch e.Basis {
+			case "day":
+				v += g.rate.MulDiv(int64(g.minutes), int64(s.DayMinutes))
+			case "hourly":
+				v += g.rate.MulDiv(int64(g.minutes), 60)
+			case "item":
+				v += g.rate.MulDiv(int64(g.count), 100)
+			}
+		}
+	case "retainer":
+		for _, month := range retainerMonthList(e, p) {
+			rate, _, err := e.RateOn(month + "-01")
+			if err != nil {
+				return 0, false, err
+			}
+			v += rate
+		}
+	default:
+		return 0, false, nil
+	}
+	return v, true, nil
+}
+
 // retainerMonths counts the calendar months in p during which a retainer
 // was running: from its start (or, without one, the first month in p) to its
 // end, or open-ended if it has none. Proposed work has not started.
-func retainerMonths(e Engagement, p Period) int {
+func retainerMonths(e Engagement, p Period) int { return len(retainerMonthList(e, p)) }
+
+// retainerMonthList is those months, YYYY-MM.
+func retainerMonthList(e Engagement, p Period) []string {
 	if e.Status == "proposed" {
-		return 0
+		return nil
 	}
 	from, to := p.From[:7], p.To[:7]
 	if len(e.Start) >= 7 && e.Start[:7] > from {
@@ -299,14 +329,18 @@ func retainerMonths(e Engagement, p Period) int {
 		to = e.End[:7]
 	}
 	if from > to {
-		return 0
+		return nil
 	}
 	f, err1 := time.Parse(monthLayout, from)
 	t, err2 := time.Parse(monthLayout, to)
 	if err1 != nil || err2 != nil {
-		return 0
+		return nil
 	}
-	return (t.Year()-f.Year())*12 + int(t.Month()-f.Month()) + 1
+	var out []string
+	for m := f; !m.After(t); m = m.AddDate(0, 1, 0) {
+		out = append(out, m.Format(monthLayout))
+	}
+	return out
 }
 
 func sortedKeys[V any](m map[string]V) []string {

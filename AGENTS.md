@@ -221,6 +221,16 @@ terminal. `TestFrameFitsTheTerminal` renders at three sizes and fails on any
 line wider than the terminal or a frame of the wrong height; the footer is
 truncated rather than wrapped for that reason.
 
+**Rates have history** (`rate.go`). `rate` is the current rate and
+`earlier_rates` a flat list of "350.00 until 2026-05-10", read by
+`parseEarlierRates`, which sorts it and rejects anything else (reported as a
+problem, never guessed). Anything that values work goes through
+`Engagement.RateOn(day)` or `groupByRate`, never `e.Rate` directly: stats
+sum per rate, and month invoices emit one line per rate. Grouping keeps a
+single-rate engagement's arithmetic exactly what it was before. `ChangeRate`
+appends the old rate until the day before; a change on or before the start
+replaces it.
+
 **`invoicing:` on a client means another system invoices them** (FreeAgent,
 Upwork). `AddInvoice` refuses for such a client before building anything,
 so the CLI, MCP and TUI all get the same refusal and message, and

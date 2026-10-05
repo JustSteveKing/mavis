@@ -27,18 +27,22 @@ const DefaultUnit = "item"
 func ValidEngagementStatus(s string) bool { return slices.Contains(EngagementStatuses, s) }
 
 type Engagement struct {
-	Slug    string `json:"slug"`
-	Status  string `json:"status"`
-	Client  string `json:"client"`
-	Title   string `json:"title"`
-	Basis   string `json:"basis,omitempty"`
-	Rate    string `json:"rate,omitempty"`
-	Budget  string `json:"budget,omitempty"`
-	Unit    string `json:"unit,omitempty"` // for item work: article, video
-	Start   string `json:"start,omitempty"`
-	End     string `json:"end,omitempty"`
-	Project string `json:"project,omitempty"`
-	Path    string `json:"path"`
+	Slug   string `json:"slug"`
+	Status string `json:"status"`
+	Client string `json:"client"`
+	Title  string `json:"title"`
+	Basis  string `json:"basis,omitempty"`
+	Rate   string `json:"rate,omitempty"`
+	Budget string `json:"budget,omitempty"`
+	Unit   string `json:"unit,omitempty"` // for item work: article, video
+
+	// EarlierRates are the rates before Rate, oldest first; see rate.go.
+	EarlierRates []EarlierRate `json:"earlier_rates,omitempty"`
+	rateErr      error
+	Start        string `json:"start,omitempty"`
+	End          string `json:"end,omitempty"`
+	Project      string `json:"project,omitempty"`
+	Path         string `json:"path"`
 }
 
 // NewEngagement is what `engagement add` supplies. Name is the short part:
@@ -71,6 +75,7 @@ func engagementFrom(path string, d *record.Document) Engagement {
 	if e.Title == "" {
 		e.Title = e.Slug
 	}
+	e.EarlierRates, e.rateErr = parseEarlierRates(d.List("earlier_rates"))
 	return e
 }
 

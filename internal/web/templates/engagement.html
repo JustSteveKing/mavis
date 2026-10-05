@@ -5,6 +5,7 @@
 <dl class="facts">
   <dt>Client</dt><dd><a href="/clients/{{pathq $e.Client}}">{{$d.Name}}</a></dd>
   {{- if $e.Basis}}<dt>Basis</dt><dd>{{$e.Basis}}{{if $e.Rate}} at {{$e.Rate}}{{if eq $e.Basis "item"}} per {{$e.UnitName}}{{end}}{{end}}</dd>{{end}}
+  {{- if $e.EarlierRates}}<dt>Earlier rates</dt><dd>{{range $i, $r := $e.EarlierRates}}{{if $i}}, {{end}}{{$r.Rate}} until {{$r.Until}}{{end}}</dd>{{end}}
   {{- if $e.Budget}}<dt>Budget</dt><dd>{{$e.Budget}}</dd>{{end}}
   {{- if $e.Start}}<dt>Start</dt><dd>{{$e.Start}}</dd>{{end}}
   {{- if $e.End}}<dt>End</dt><dd>{{$e.End}}</dd>{{end}}

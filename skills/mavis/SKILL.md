@@ -132,6 +132,10 @@ them. Never derive a Peppol ID from a VAT number: `9932:GB123456789` and
   invoices.
 - Issued invoices never change. A correction is a credit note
   (`draft_credit_note`), which the user then issues.
+- An engagement's `rate` is today's. Earlier work is valued at the rate on
+  its date, from `earlier_rates`. When the user says a rate changed, use
+  `change_rate` with the day it took effect; never edit the rate in place,
+  which would reprice everything before it.
 - Do not move a client between active, warm and cold unless the user asks.
   Whether a relationship has cooled is their judgement.
 - Everything you create is stamped `by: agent` in its file. That is

@@ -180,6 +180,15 @@ func (t *tools) registerRecords(srv *mcp.Server) {
 			return nil, out, nil
 		})
 
+	mcp.AddTool(srv, &mcp.Tool{Name: "change_rate", Description: "Change an engagement's rate from a date on, only when the human tells you their rate changed. The old rate is kept until the day before, so earlier work keeps its value.", Annotations: writes},
+		func(ctx context.Context, req *mcp.CallToolRequest, in rateIn) (*mcp.CallToolResult, store.Engagement, error) {
+			if _, err := t.engagement(in.Engagement); err != nil {
+				return nil, store.Engagement{}, err
+			}
+			e, err := t.s.ChangeRate(in.Engagement, in.Rate, in.From)
+			return nil, e, err
+		})
+
 	mcp.AddTool(srv, &mcp.Tool{Name: "log_delivery", Description: "Record items delivered on item work (an engagement with basis item, paid per article, video and so on). Day and hourly work takes log_time instead. Warns when that month is already invoiced.", Annotations: writes},
 		func(ctx context.Context, req *mcp.CallToolRequest, in deliveryIn) (*mcp.CallToolResult, timeLogged, error) {
 			if _, err := t.engagement(in.Engagement); err != nil {
@@ -195,6 +204,12 @@ func (t *tools) registerRecords(srv *mcp.Server) {
 			}
 			return nil, out, nil
 		})
+}
+
+type rateIn struct {
+	Engagement string `json:"engagement" jsonschema:"exact engagement slug; required"`
+	Rate       string `json:"rate" jsonschema:"the new rate, a decimal string; required"`
+	From       string `json:"from,omitempty" jsonschema:"the first day at the new rate, YYYY-MM-DD; defaults to today"`
 }
 
 type deliveryIn struct {

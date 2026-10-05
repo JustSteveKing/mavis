@@ -202,6 +202,18 @@ time. Give it a rate per item and say what an item is:
 mavis engagement add sevalla articles --basis item --rate 750 --unit article
 ```
 
+Rates change. Record a change from the day it took effect, and mavis keeps
+the old rate for the work before it:
+
+```bash
+mavis engagement rate envolutions-kpz 380 --from 2026-05-11
+```
+
+The note gains `earlier_rates: [350.00 until 2026-05-10]`. Stats value
+each entry at the rate on its date, and a month that spans the change is
+invoiced as two lines, one at each rate. A retainer month takes the rate on
+its first day.
+
 ## The log
 
 Calls, meetings, emails and notes all go in one log, one file each, so a

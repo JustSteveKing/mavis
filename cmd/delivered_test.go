@@ -55,3 +55,16 @@ func TestClientSetInvoicing(t *testing.T) {
 		t.Errorf("invoice new: %v", err)
 	}
 }
+
+func TestEngagementRate(t *testing.T) {
+	setup(t)
+	run(t, "client", "add", "env", "--name", "Envolutions")
+	run(t, "engagement", "add", "env", "kpz", "--basis", "day", "--rate", "350", "--start", "2026-03-05")
+	out, err := run(t, "engagement", "rate", "env-kpz", "380", "--from", "2026-05-11")
+	if err != nil || !strings.Contains(out, "day @ 380.00") || !strings.Contains(out, "Earlier: 350.00 until 2026-05-10") {
+		t.Fatalf("%q %v", out, err)
+	}
+	if out, _ = run(t, "engagement", "show", "env-kpz"); !strings.Contains(out, "350.00 until 2026-05-10") {
+		t.Errorf("show: %s", out)
+	}
+}

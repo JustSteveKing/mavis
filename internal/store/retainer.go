@@ -76,7 +76,11 @@ func (s *Store) RetainersDue() ([]RetainerDue, error) {
 			if billed[e.Slug+"/"+month] {
 				continue
 			}
-			out = append(out, RetainerDue{Engagement: e.Slug, Client: e.Client, Title: e.Title, Month: month, Rate: e.Rate})
+			rate := e.Rate
+			if r, ok, err := e.RateOn(month + "-01"); err == nil && ok {
+				rate = r.String()
+			}
+			out = append(out, RetainerDue{Engagement: e.Slug, Client: e.Client, Title: e.Title, Month: month, Rate: rate})
 		}
 	}
 	slices.SortStableFunc(out, func(a, b RetainerDue) int {

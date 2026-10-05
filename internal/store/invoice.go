@@ -476,10 +476,12 @@ func (s *Store) linesForMonth(client Client, month, label string, vat int, only 
 	}
 	minutes := map[string]int{}
 	items := map[string]money.Pence{}
+	worked := map[string][]TimeEntry{}
 	for _, e := range entries {
 		if strings.HasPrefix(e.Date, month) {
 			minutes[e.Engagement] += e.Minutes
 			items[e.Engagement] += e.Count
+			worked[e.Engagement] = append(worked[e.Engagement], e)
 		}
 	}
 	p, _ := MonthPeriod(month)
@@ -500,27 +502,60 @@ func (s *Store) linesForMonth(client Client, month, label string, vat int, only 
 			skipped = append(skipped, Skipped{e.Slug, "already on " + by})
 			continue
 		}
-		rate, err := money.Parse(e.Rate)
-		if e.Rate == "" || err != nil {
+		if _, err := money.Parse(e.Rate); e.Rate == "" || err != nil {
 			skipped = append(skipped, Skipped{e.Slug, "no rate set"})
 			continue
 		}
+		if e.rateErr != nil {
+			skipped = append(skipped, Skipped{e.Slug, e.rateErr.Error()})
+			continue
+		}
 
-		var qty money.Pence
-		var unit string
+		// One line per rate: a month that spans a rate change bills each
+		// part at the rate on its days.
+		var add []Line
+		line := func(qty money.Pence, unit string, rate money.Pence) {
+			add = append(add, Line{
+				Description: e.Title + ", " + label,
+				Qty:         trimQty(qty),
+				Unit:        unit,
+				Price:       rate,
+				VAT:         vat,
+				Amount:      rate.MulDiv(int64(qty), 100),
+			})
+		}
 		switch e.Basis {
-		case "day":
-			qty, unit = money.Pence(int64(minutes[e.Slug])*100).MulDiv(1, int64(s.DayMinutes)), "day"
-		case "hourly":
-			qty, unit = money.Pence(int64(minutes[e.Slug])*100).MulDiv(1, 60), "hour"
-		case "retainer":
-			qty, unit = 100, "month"
-		case "item":
-			if items[e.Slug] == 0 {
+		case "day", "hourly", "item":
+			if e.Basis == "item" && items[e.Slug] == 0 {
 				skipped = append(skipped, Skipped{e.Slug, "time logged but nothing delivered"})
 				continue
 			}
-			qty, unit = items[e.Slug], e.UnitName()
+			groups, err := groupByRate(e, worked[e.Slug])
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			for _, g := range groups {
+				switch e.Basis {
+				case "day":
+					if g.minutes > 0 {
+						line(money.Pence(int64(g.minutes)*100).MulDiv(1, int64(s.DayMinutes)), "day", g.rate)
+					}
+				case "hourly":
+					if g.minutes > 0 {
+						line(money.Pence(int64(g.minutes)*100).MulDiv(1, 60), "hour", g.rate)
+					}
+				case "item":
+					if g.count > 0 {
+						line(g.count, e.UnitName(), g.rate)
+					}
+				}
+			}
+		case "retainer":
+			rate, _, err := e.RateOn(month + "-01")
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			line(100, "month", rate)
 		case "fixed":
 			skipped = append(skipped, Skipped{e.Slug, "fixed price: add the milestone with --line"})
 			continue
@@ -528,14 +563,7 @@ func (s *Store) linesForMonth(client Client, month, label string, vat int, only 
 			skipped = append(skipped, Skipped{e.Slug, "no basis set"})
 			continue
 		}
-		lines = append(lines, Line{
-			Description: e.Title + ", " + label,
-			Qty:         trimQty(qty),
-			Unit:        unit,
-			Price:       rate,
-			VAT:         vat,
-			Amount:      rate.MulDiv(int64(qty), 100),
-		})
+		lines = append(lines, add...)
 		covered = append(covered, e.Slug)
 	}
 	return lines, covered, skipped, nil
