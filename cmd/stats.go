@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"text/tabwriter"
 	"time"
 
@@ -62,13 +63,33 @@ Amounts in different currencies are totalled separately.`,
 
 			day := s.DayMinutes
 			if len(st.Engagements) > 0 {
-				rows := [][]string{{"CLIENT", "ENGAGEMENT", "BASIS", "TIME", "VALUE", "PER DAY"}}
+				// A DELIVERED column only when there is item work, so the table
+				// reads as it always did for everyone else.
+				items := slices.ContainsFunc(st.Engagements, func(e store.EngagementStat) bool { return e.Basis == "item" })
+				head := []string{"CLIENT", "ENGAGEMENT", "BASIS", "TIME", "VALUE", "PER DAY"}
+				right := map[int]bool{3: true, 4: true, 5: true}
+				if items {
+					head = []string{"CLIENT", "ENGAGEMENT", "BASIS", "DELIVERED", "TIME", "VALUE", "PER DAY"}
+					right = map[int]bool{3: true, 4: true, 5: true, 6: true}
+				}
+				rows := [][]string{head}
 				for _, e := range st.Engagements {
 					basis := e.Basis
 					if r, err := money.Parse(e.Rate); err == nil && e.Basis != "fixed" {
 						basis += " @ " + r.Display()
+						if e.Unit != "" {
+							basis += " per " + e.Unit
+						}
 					}
-					rows = append(rows, []string{e.Client, e.Title, basis, timeCell(e.Minutes, day), amount(e.Value), amount(e.PerDay)})
+					row := []string{e.Client, e.Title, basis, timeCell(e.Minutes, day), amount(e.Value), amount(e.PerDay)}
+					if items {
+						delivered := "-"
+						if e.Items != "" {
+							delivered = e.Items + " " + store.Plural(e.Unit, e.Items)
+						}
+						row = slices.Insert(row, 3, delivered)
+					}
+					rows = append(rows, row)
 				}
 				for _, t := range st.Totals {
 					label := "Total"
@@ -76,9 +97,13 @@ Amounts in different currencies are totalled separately.`,
 						label += " " + t.Currency
 					}
 					v := t.Value
-					rows = append(rows, []string{label, "", "", timeCell(t.Minutes, day), amount(&v), amount(t.PerDay)})
+					row := []string{label, "", "", timeCell(t.Minutes, day), amount(&v), amount(t.PerDay)}
+					if items {
+						row = slices.Insert(row, 3, "")
+					}
+					rows = append(rows, row)
 				}
-				table(a.out, "", map[int]bool{3: true, 4: true, 5: true}, rows)
+				table(a.out, "", right, rows)
 			}
 
 			if len(st.Fixed) > 0 {

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/JustSteveKing/mavis/internal/duration"
+	"github.com/JustSteveKing/mavis/internal/money"
 	"github.com/JustSteveKing/mavis/internal/store"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
@@ -128,6 +129,71 @@ func (m model) startTime() (tea.Model, tea.Cmd) {
 			return outcome{}, err
 		}
 		status := fmt.Sprintf("Logged %s to %s on %s", e.Time, e.Engagement, e.Date)
+		if by, err := m.s.InvoiceCovering(e.Engagement, e.Date[:7]); err == nil && by != "" {
+			status += "; that month is already on " + by + ", so this is not"
+		}
+		return done(status), nil
+	})
+}
+
+// ---------------------------------------------------------- a delivery
+
+// itemEngagements are the client's engagements paid per item.
+func (m model) itemEngagements(client string) []store.Engagement {
+	var out []store.Engagement
+	for _, e := range m.clientEngagements(client) {
+		if e.Basis == "item" {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+func (m model) startDelivery() (tea.Model, tea.Cmd) {
+	r := m.selected()
+	if r == nil || r.client == "" {
+		return m.say("d records a delivery; select a client first")
+	}
+	engagements := m.itemEngagements(r.client)
+	if len(engagements) == 0 {
+		return m.say(r.client + " has no item work to deliver to; that is an engagement with basis item")
+	}
+	v := &struct{ engagement, items, what, date string }{engagement: engagements[0].Slug, items: "1", date: "today"}
+	var options []huh.Option[string]
+	for _, e := range engagements {
+		options = append(options, huh.NewOption(e.Title+"  ("+e.Slug+", per "+e.UnitName()+")", e.Slug))
+		if e.Slug == r.engagement {
+			v.engagement = e.Slug
+		}
+	}
+	f := huh.NewForm(huh.NewGroup(
+		huh.NewSelect[string]().Title("Engagement").Options(options...).Value(&v.engagement),
+		huh.NewInput().Title("What").Placeholder("e.g. the article's title").Value(&v.what),
+		huh.NewInput().Title("Items").Value(&v.items).
+			Validate(func(s string) error {
+				if n, err := money.Parse(strings.TrimSpace(s)); err != nil || n <= 0 {
+					return fmt.Errorf("a number above zero")
+				}
+				return nil
+			}),
+		huh.NewInput().Title("Date").Placeholder("YYYY-MM-DD, today or yesterday").Value(&v.date).
+			Validate(func(s string) error {
+				_, err := m.s.ParseDay(s)
+				return err
+			}),
+	))
+	return m.openForm("Record a delivery for "+r.client, f, func() (outcome, error) {
+		e, err := m.s.AddDelivery(store.NewDelivery{Engagement: v.engagement, Items: v.items, What: v.what, Date: v.date})
+		if err != nil {
+			return outcome{}, err
+		}
+		unit := store.DefaultUnit
+		for _, eng := range engagements {
+			if eng.Slug == e.Engagement {
+				unit = eng.UnitName()
+			}
+		}
+		status := fmt.Sprintf("Recorded %s %s to %s on %s", e.Items, store.Plural(unit, e.Items), e.Engagement, e.Date)
 		if by, err := m.s.InvoiceCovering(e.Engagement, e.Date[:7]); err == nil && by != "" {
 			status += "; that month is already on " + by + ", so this is not"
 		}

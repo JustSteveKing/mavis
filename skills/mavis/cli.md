@@ -18,7 +18,8 @@ them unless the user tells you to.
 | `mavis follow-ups [--overdue] [--client c]` | Open follow-ups |
 | `mavis done [client] <words>` | Tick off a follow-up |
 | `mavis time <engagement> <duration> "<what>" [--date YYYY-MM-DD]` | Log time |
-| `mavis time list [--month YYYY-MM] [--client c]` | Time for a month |
+| `mavis delivered <engagement> "<what>" [--items 2] [--date ...]` | Record items delivered on item work |
+| `mavis time list [--month YYYY-MM] [--client c]` | Time and deliveries for a month |
 | `mavis stats [--month YYYY-MM \| --year YYYY \| --from D --to D]` | Time, value, invoices, quotes |
 | `mavis tui` | The interactive view |
 | `mavis web [--port n] [--no-open]` | Read-only view in the browser; runs until stopped, so start it only when the user asks |
@@ -31,7 +32,7 @@ them unless the user tells you to.
 | `mavis client list [--status s]` / `client show <client>` | Read |
 | `mavis client set <client> [--address line --country GB --vat-number ... --peppol-id ... --buyer-reference ... --terms 30]` | Change details |
 | `mavis client <prospect\|active\|warm\|cold> <client>` | Move a client, only when asked |
-| `mavis engagement add <client> <name> --title "..." [--basis day --rate 650 --budget ... --start ...]` | Add an engagement |
+| `mavis engagement add <client> <name> --title "..." [--basis day --rate 650 --budget ... --start ...]` | Add an engagement; item work takes `--basis item --rate 750 --unit article` |
 | `mavis engagement list [--client c]` / `engagement show <e>` | Read |
 | `mavis engagement <proposed\|active\|paused\|done> <e>` | Move an engagement |
 

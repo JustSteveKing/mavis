@@ -221,6 +221,18 @@ terminal. `TestFrameFitsTheTerminal` renders at three sizes and fails on any
 line wider than the terminal or a frame of the wrong height; the footer is
 truncated rather than wrapped for that reason.
 
+**Item work shares the timesheet.** `basis: item` engagements carry a rate
+per item and a `unit`; deliveries are rows in the same monthly sheet, with
+an `Items` column. Sheets are read by their header row (`columns`), so
+three-column sheets from before are untouched, and `appendRow` writes cells
+in the header's own order, adding the `Items` column to an old sheet on its
+first delivery. `TimeEntry.Count` is items in hundredths, like money, so
+half an item works and value is `rate.MulDiv(count, 100)`. A row needs time
+or items; a dash means none. Only item work takes deliveries
+(`AddDelivery` refuses the rest), and time on item work without deliveries
+is not billable: the draft skips it with a reason. `store.Plural` pluralises
+units but leaves one ending in s as written, since hand lines say "3 seats".
+
 **`internal/web` is read-only, and that is the design, not a gap.**
 Only `GET` routes exist (a write gets 405), and handlers call list
 functions and nothing else, reading the files on every request. Templates

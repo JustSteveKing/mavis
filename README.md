@@ -180,8 +180,15 @@ mavis engagement done reporting
 
 Statuses are `proposed`, `active`, `paused` and `done`. Moving to `active`
 stamps a start date if there is none, and `done` stamps the end. Basis
-(`day`, `hourly`, `fixed`, `retainer`) and rate are optional, and only matter
-once you track time or invoice.
+(`day`, `hourly`, `fixed`, `retainer`, `item`) and rate are optional, and only
+matter once you track time or invoice.
+
+Item work is paid per thing delivered, an article or a video, rather than for
+time. Give it a rate per item and say what an item is:
+
+```bash
+mavis engagement add sevalla articles --basis item --rate 750 --unit article
+```
 
 ## The log
 
@@ -244,6 +251,32 @@ Fix a mistake by editing the table, in Obsidian or with
 `mavis time edit reporting`. A row mavis cannot read is reported with its line
 number and left out of the totals, rather than hiding the rest of the sheet.
 New rows go at the end of the table, so a note you write under it stays put.
+
+### Deliveries
+
+On item work, record what you delivered instead, one item unless you say:
+
+```bash
+mavis delivered sevalla-articles "Laravel queues, a deep dive"
+mavis delivered sevalla-articles "Two short tips" --items 2 --date yesterday
+```
+
+Deliveries go in the same monthly sheet, which for item work has an `Items`
+column. Log time against item work too if you want to know what it pays by
+the day: each row holds items, time, or both.
+
+```markdown
+| Date | Items | Time | What |
+|------|-------|------|------|
+| 2026-10-02 | - | 0.5d | Research for the queues piece |
+| 2026-10-03 | 1 | - | Laravel queues, a deep dive |
+```
+
+A month's invoice bills what was delivered (`4 articles x 750`), and stats
+value it the same way, with a per-day figure when there is time beside it:
+750 for half a day of writing reads as 1,500 a day. A sheet from before
+item work gains the `Items` column the first time something is delivered to
+it, its old rows filled with a dash.
 
 ## Quotes
 

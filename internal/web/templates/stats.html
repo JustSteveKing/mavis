@@ -14,15 +14,15 @@
 {{- if $s.Engagements}}
 <div class="scroll">
 <table>
-  <thead><tr><th scope="col">Engagement</th><th scope="col">Client</th><th scope="col">Basis</th><th scope="col" class="num">Time</th><th scope="col" class="num">Value</th><th scope="col" class="num">Per day</th></tr></thead>
+  <thead><tr><th scope="col">Engagement</th><th scope="col">Client</th><th scope="col">Basis</th>{{if $d.HasItems}}<th scope="col" class="num">Delivered</th>{{end}}<th scope="col" class="num">Time</th><th scope="col" class="num">Value</th><th scope="col" class="num">Per day</th></tr></thead>
   <tbody>
   {{- range $s.Engagements}}
-  <tr><td><a href="/engagements/{{pathq .Engagement}}">{{.Title}}</a></td><td><a href="/clients/{{pathq .Client}}">{{$d.Rec.ClientName .Client}}</a></td><td>{{.Basis}}{{if .Rate}} · {{.Rate}}{{end}}</td><td class="num">{{spent .Minutes}}</td><td class="num">{{moneyp .Value}}</td><td class="num">{{moneyp .PerDay}}</td></tr>
+  <tr><td><a href="/engagements/{{pathq .Engagement}}">{{.Title}}</a></td><td><a href="/clients/{{pathq .Client}}">{{$d.Rec.ClientName .Client}}</a></td><td>{{.Basis}}{{if .Rate}} · {{.Rate}}{{if .Unit}} per {{.Unit}}{{end}}{{end}}</td>{{if $d.HasItems}}<td class="num">{{if .Items}}{{.Items}} {{plural .Unit .Items}}{{else}}-{{end}}</td>{{end}}<td class="num">{{spent .Minutes}}</td><td class="num">{{moneyp .Value}}</td><td class="num">{{moneyp .PerDay}}</td></tr>
   {{- end}}
   </tbody>
   <tfoot>
   {{- range $s.Totals}}
-  <tr class="total"><th scope="row" colspan="3">Total {{.Currency}}</th><td class="num">{{spent .Minutes}}</td><td class="num">{{money .Value .Currency}}</td><td class="num">{{moneyp .PerDay}}</td></tr>
+  <tr class="total"><th scope="row" colspan="{{if $d.HasItems}}4{{else}}3{{end}}">Total {{.Currency}}</th><td class="num">{{spent .Minutes}}</td><td class="num">{{money .Value .Currency}}</td><td class="num">{{moneyp .PerDay}}</td></tr>
   {{- end}}
   </tfoot>
 </table>

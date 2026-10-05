@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -16,8 +17,12 @@ import (
 var EngagementStatuses = []string{"proposed", "active", "paused", "done"}
 
 // Bases are how an engagement is billed. Optional until time tracking or
-// invoicing needs one.
-var Bases = []string{"day", "hourly", "fixed", "retainer"}
+// invoicing needs one. An item engagement is paid per thing delivered (an
+// article, a video), at its rate per unit.
+var Bases = []string{"day", "hourly", "fixed", "retainer", "item"}
+
+// DefaultUnit is what an item engagement delivers when it does not say.
+const DefaultUnit = "item"
 
 func ValidEngagementStatus(s string) bool { return slices.Contains(EngagementStatuses, s) }
 
@@ -29,6 +34,7 @@ type Engagement struct {
 	Basis   string `json:"basis,omitempty"`
 	Rate    string `json:"rate,omitempty"`
 	Budget  string `json:"budget,omitempty"`
+	Unit    string `json:"unit,omitempty"` // for item work: article, video
 	Start   string `json:"start,omitempty"`
 	End     string `json:"end,omitempty"`
 	Project string `json:"project,omitempty"`
@@ -39,6 +45,9 @@ type Engagement struct {
 // client acme and name reporting make the file acme-reporting.md.
 type NewEngagement struct {
 	Client, Name, Title, Status, Basis, Rate, Budget, Start, Project string
+
+	// Unit is what item work delivers, singular: article.
+	Unit string
 
 	// Quote is the number of the quote this work was accepted from.
 	Quote string
@@ -53,6 +62,7 @@ func engagementFrom(path string, d *record.Document) Engagement {
 		Basis:   d.Get("basis"),
 		Rate:    d.Get("rate"),
 		Budget:  d.Get("budget"),
+		Unit:    d.Get("unit"),
 		Start:   d.Get("start"),
 		End:     d.Get("end"),
 		Project: linkTarget(d.Get("project")),
@@ -108,6 +118,16 @@ func (s *Store) AddEngagement(in NewEngagement) (Engagement, error) {
 	}
 	if in.Basis != "" && !slices.Contains(Bases, in.Basis) {
 		return Engagement{}, fmt.Errorf("basis must be one of %s", strings.Join(Bases, ", "))
+	}
+	if in.Unit != "" {
+		unit, err := normaliseUnit(in.Unit)
+		if err != nil {
+			return Engagement{}, err
+		}
+		if in.Basis != "item" {
+			return Engagement{}, fmt.Errorf("unit is for item work: set the basis to item, or leave the unit out")
+		}
+		in.Unit = unit
 	}
 	if in.Rate != "" {
 		rate, err := money.Normalise(in.Rate)
@@ -166,6 +186,9 @@ func (s *Store) AddEngagement(in NewEngagement) (Engagement, error) {
 		if in.Budget != "" {
 			d.Set("budget", in.Budget)
 		}
+		if in.Unit != "" {
+			d.Set("unit", in.Unit)
+		}
 		if start != "" {
 			d.SetPlain("start", start)
 		}
@@ -184,6 +207,26 @@ func (s *Store) AddEngagement(in NewEngagement) (Engagement, error) {
 		return nil
 	})
 	return out, err
+}
+
+// UnitName is what the engagement delivers, for item work.
+func (e Engagement) UnitName() string {
+	if e.Unit != "" {
+		return e.Unit
+	}
+	return DefaultUnit
+}
+
+var unitPattern = regexp.MustCompile(`^[a-z][a-z -]*[a-z]$|^[a-z]$`)
+
+// normaliseUnit takes a unit as typed, Article or " article ", and gives the
+// singular lowercase word mavis stores and pluralises itself.
+func normaliseUnit(u string) (string, error) {
+	u = strings.ToLower(strings.Join(strings.Fields(u), " "))
+	if !unitPattern.MatchString(u) {
+		return "", fmt.Errorf("unit %q: use a word for one of the things delivered, such as article", u)
+	}
+	return u, nil
 }
 
 // ResolveEngagement finds an engagement by exact slug, or a substring of its

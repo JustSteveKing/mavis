@@ -27,7 +27,8 @@ and clients gone quiet.
 LOG WHAT HAPPENED. After a call or meeting the human tells you about, use
 log_interaction with a short factual summary, and put anything that has to
 happen next in follow_ups with a due date. That is what makes get_today
-useful tomorrow.
+useful tomorrow. Work is logged with log_time, or for work paid per item (an
+engagement with basis item) with log_delivery.
 
 DO NOT MOVE CLIENTS ON YOUR OWN JUDGEMENT. get_today suggests moves (active
 to warm, warm to cold). Pass them on; only call move_client when the human

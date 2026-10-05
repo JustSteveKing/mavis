@@ -427,7 +427,11 @@ func (m model) footer() string {
 				keys = append(keys, [2]string{"x", "done"})
 			}
 			if r.client != "" {
-				keys = append(keys, [2]string{"l", "log call"}, [2]string{"t", "time"}, [2]string{"n", "note"}, [2]string{"m", "move"}, [2]string{"e", "engagement"}, [2]string{"i", "invoice"})
+				keys = append(keys, [2]string{"l", "log call"}, [2]string{"t", "time"})
+				if len(m.itemEngagements(r.client)) > 0 {
+					keys = append(keys, [2]string{"d", "delivered"})
+				}
+				keys = append(keys, [2]string{"n", "note"}, [2]string{"m", "move"}, [2]string{"e", "engagement"}, [2]string{"i", "invoice"})
 			}
 			if inv, ok := m.invoiceFor(r); ok && inv.Kind == "invoice" && inv.Status == "issued" {
 				keys = append(keys, [2]string{"p", "paid"})
@@ -453,6 +457,7 @@ func (m model) helpView() string {
 		{"x", "tick off the selected follow-up"},
 		{"l", "log a call, meeting or email, with a follow-up if there is one"},
 		{"t", "log time to one of the selected client's engagements"},
+		{"d", "record something delivered on the client's item work"},
 		{"n", "add a quick note to the selected client"},
 		{"m", "move the selected client: active, warm, cold or prospect"},
 		{"c", "add a new client"},

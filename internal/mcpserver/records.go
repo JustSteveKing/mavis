@@ -42,9 +42,10 @@ type addEngagementIn struct {
 	Name   string `json:"name" jsonschema:"short name; the slug becomes <client>-<name>; required"`
 	Title  string `json:"title,omitempty" jsonschema:"what the work is"`
 	Status string `json:"status,omitempty" jsonschema:"proposed, active, paused or done; defaults to active"`
-	Basis  string `json:"basis,omitempty" jsonschema:"day, hourly, fixed or retainer"`
-	Rate   string `json:"rate,omitempty" jsonschema:"decimal string; per day or hour, or per month for a retainer"`
+	Basis  string `json:"basis,omitempty" jsonschema:"day, hourly, fixed, retainer, or item for work paid per thing delivered"`
+	Rate   string `json:"rate,omitempty" jsonschema:"decimal string; per day or hour, per item for item work, or per month for a retainer"`
 	Budget string `json:"budget,omitempty" jsonschema:"decimal string; the agreed price of fixed-price work"`
+	Unit   string `json:"unit,omitempty" jsonschema:"item work only: what one item is, singular, e.g. article; defaults to item"`
 	Start  string `json:"start,omitempty" jsonschema:"YYYY-MM-DD"`
 }
 
@@ -122,7 +123,7 @@ func (t *tools) registerRecords(srv *mcp.Server) {
 			if _, err := t.client(in.Client); err != nil {
 				return nil, store.Engagement{}, err
 			}
-			e, err := t.s.AddEngagement(store.NewEngagement{Client: in.Client, Name: in.Name, Title: in.Title, Status: in.Status, Basis: in.Basis, Rate: in.Rate, Budget: in.Budget, Start: in.Start})
+			e, err := t.s.AddEngagement(store.NewEngagement{Client: in.Client, Name: in.Name, Title: in.Title, Status: in.Status, Basis: in.Basis, Rate: in.Rate, Budget: in.Budget, Unit: in.Unit, Start: in.Start})
 			return nil, e, err
 		})
 
@@ -177,6 +178,29 @@ func (t *tools) registerRecords(srv *mcp.Server) {
 			}
 			return nil, out, nil
 		})
+
+	mcp.AddTool(srv, &mcp.Tool{Name: "log_delivery", Description: "Record items delivered on item work (an engagement with basis item, paid per article, video and so on). Day and hourly work takes log_time instead. Warns when that month is already invoiced.", Annotations: writes},
+		func(ctx context.Context, req *mcp.CallToolRequest, in deliveryIn) (*mcp.CallToolResult, timeLogged, error) {
+			if _, err := t.engagement(in.Engagement); err != nil {
+				return nil, timeLogged{}, err
+			}
+			e, err := t.s.AddDelivery(store.NewDelivery{Engagement: in.Engagement, Items: in.Items, What: in.What, Date: in.Date})
+			if err != nil {
+				return nil, timeLogged{}, err
+			}
+			out := timeLogged{Entry: e}
+			if by, err := t.s.InvoiceCovering(e.Engagement, e.Date[:7]); err == nil && by != "" {
+				out.Warning = e.Engagement + " for " + e.Date[:7] + " is already on " + by + "; this is not on it"
+			}
+			return nil, out, nil
+		})
+}
+
+type deliveryIn struct {
+	Engagement string `json:"engagement" jsonschema:"exact slug of an item engagement; required"`
+	Items      string `json:"items,omitempty" jsonschema:"how many were delivered, a decimal string; defaults to 1"`
+	What       string `json:"what,omitempty" jsonschema:"what was delivered, e.g. the article's title"`
+	Date       string `json:"date,omitempty" jsonschema:"YYYY-MM-DD, today or yesterday; defaults to today"`
 }
 
 type timeLogged struct {

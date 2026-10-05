@@ -65,13 +65,21 @@ When the user tells you about a call, meeting or email, log it with
 Tick off a follow-up with `complete_follow_up`, naming its log entry and its
 exact text, both from `list_follow_ups` (CLI: `mavis done <client> <words>`).
 
-### Time
+### Time and deliveries
 
 Log time with `log_time` (CLI: `mavis time <engagement> <duration> "<what>"`).
 Durations are `1d`, `0.5d`, `3h`, `45m` or `1h30m`; a day is the user's
 configured working day, 7.5 hours unless set. If the result carries a
 warning that the month is already invoiced, tell the user: that time is not
 on the invoice.
+
+Work paid per item (an engagement with `basis: item`, an article or a video)
+takes deliveries instead: `log_delivery` with the engagement, the number of
+items (default 1) and what was delivered (CLI: `mavis delivered <engagement>
+"<what>"`). `log_time` refuses nothing on item work, but time alone there is
+never billed; log both if the user wants to know what the work pays by the
+day. Add item work with `add_engagement`, basis `item`, a rate per item and a
+`unit` such as `article`.
 
 ### Month-end billing
 

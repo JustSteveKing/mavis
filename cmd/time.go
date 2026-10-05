@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"text/tabwriter"
 
@@ -56,7 +57,7 @@ func newTimeListCommand(a *app) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "list",
 		Aliases: []string{"ls"},
-		Short:   "List time for a month",
+		Short:   "List time and deliveries for a month",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			s, err := a.openStore()
@@ -105,7 +106,22 @@ func newTimeListCommand(a *app) *cobra.Command {
 				a.printf("No time logged.\n")
 				return nil
 			}
+			items := slices.ContainsFunc(shown, func(e store.TimeEntry) bool { return e.Items != "" })
+			dash := func(v string) string {
+				if v == "" {
+					return "-"
+				}
+				return v
+			}
 			w := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
+			if items {
+				fmt.Fprintln(w, "DATE\tENGAGEMENT\tITEMS\tTIME\tWHAT")
+				for _, e := range shown {
+					fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", e.Date, e.Engagement, dash(e.Items), dash(e.Time), e.What)
+				}
+				fmt.Fprintf(w, "Total\t\t\t%s\t%s\n", duration.Days(total, s.DayMinutes), duration.Hours(total))
+				return w.Flush()
+			}
 			fmt.Fprintln(w, "DATE\tENGAGEMENT\tTIME\tWHAT")
 			for _, e := range shown {
 				fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", e.Date, e.Engagement, e.Time, e.What)

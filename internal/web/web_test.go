@@ -89,7 +89,7 @@ func TestEveryPageRenders(t *testing.T) {
 		"/log/" + logSlug(t, s):       "Send estimate",
 		"/follow-ups/":                "Send estimate",
 		"/time/?month=2026-09":        "Exports",
-		"/time/":                      "No time logged in October 2026",
+		"/time/":                      "No time logged or work delivered in October 2026",
 		"/invoices/":                  "INV-2026-001",
 		"/invoices/INV-2026-001":      "Workshop",
 		"/quotes/":                    "Rebuild",
@@ -220,5 +220,27 @@ func TestReadsTheFilesEachTime(t *testing.T) {
 	}
 	if !strings.Contains(body(t, get(t, h, "/clients/")), "Globex") {
 		t.Error("a client added after the server started is missing")
+	}
+}
+
+func TestItemWorkShowsWhatWasDelivered(t *testing.T) {
+	s, h := seeded(t)
+	if _, err := s.AddEngagement(store.NewEngagement{Client: "acme", Name: "articles", Title: "Articles", Basis: "item", Rate: "750", Unit: "article"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddDelivery(store.NewDelivery{Engagement: "acme-articles", Items: "2", What: "Two tips", Date: "2026-09-12"}); err != nil {
+		t.Fatal(err)
+	}
+	for path, want := range map[string][]string{
+		"/engagements/acme-articles": {"750.00 per article", "2 articles", "Two tips"},
+		"/time/?month=2026-09":       {"Delivered", "2 articles", "Two tips"},
+		"/stats/?month=2026-09":      {"Delivered", "2 articles", "1,500.00"},
+	} {
+		got := body(t, get(t, h, path))
+		for _, w := range want {
+			if !strings.Contains(got, w) {
+				t.Errorf("%s: no %q", path, w)
+			}
+		}
 	}
 }

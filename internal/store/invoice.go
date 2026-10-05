@@ -472,9 +472,11 @@ func (s *Store) linesForMonth(client Client, month, label string, vat int, only 
 		}
 	}
 	minutes := map[string]int{}
+	items := map[string]money.Pence{}
 	for _, e := range entries {
 		if strings.HasPrefix(e.Date, month) {
 			minutes[e.Engagement] += e.Minutes
+			items[e.Engagement] += e.Count
 		}
 	}
 	p, _ := MonthPeriod(month)
@@ -486,9 +488,9 @@ func (s *Store) linesForMonth(client Client, month, label string, vat int, only 
 		if e.Client != client.Slug || (only != "" && e.Slug != only) {
 			continue
 		}
-		hasTime := minutes[e.Slug] > 0
+		hasWork := minutes[e.Slug] > 0 || items[e.Slug] > 0
 		isRetainer := e.Basis == "retainer" && retainerMonths(e, p) > 0
-		if !hasTime && !isRetainer {
+		if !hasWork && !isRetainer {
 			continue
 		}
 		if by, ok := billed[e.Slug]; ok {
@@ -510,6 +512,12 @@ func (s *Store) linesForMonth(client Client, month, label string, vat int, only 
 			qty, unit = money.Pence(int64(minutes[e.Slug])*100).MulDiv(1, 60), "hour"
 		case "retainer":
 			qty, unit = 100, "month"
+		case "item":
+			if items[e.Slug] == 0 {
+				skipped = append(skipped, Skipped{e.Slug, "time logged but nothing delivered"})
+				continue
+			}
+			qty, unit = items[e.Slug], e.UnitName()
 		case "fixed":
 			skipped = append(skipped, Skipped{e.Slug, "fixed price: add the milestone with --line"})
 			continue
@@ -663,15 +671,25 @@ func (s *Store) AddCreditNote(query string, full bool, manual []ManualLine) (Inv
 // "1 day", "2.75 hours". Only the units mavis writes itself (day, hour,
 // month) are pluralised; anything typed by hand is left as typed.
 func (l Line) Quantity() string {
-	unit := l.Unit
-	if unit == "" {
+	if l.Unit == "" {
 		return l.Qty
 	}
-	if l.Qty != "1" {
-		switch unit {
-		case "day", "hour", "month":
-			unit += "s"
-		}
+	return l.Qty + " " + Plural(l.Unit, l.Qty)
+}
+
+// Plural is a unit for a quantity: 1 article, 4 articles, 0.5 days. English
+// enough for the units people bill by. A unit already ending in s is left as
+// written, since a line typed by hand often says "3 seats" already.
+func Plural(unit, qty string) string {
+	if qty == "1" || unit == "" || strings.HasSuffix(unit, "s") {
+		return unit
 	}
-	return l.Qty + " " + unit
+	n := len(unit)
+	switch {
+	case strings.HasSuffix(unit, "x"), strings.HasSuffix(unit, "ch"), strings.HasSuffix(unit, "sh"):
+		return unit + "es"
+	case n > 1 && unit[n-1] == 'y' && !strings.ContainsRune("aeiou", rune(unit[n-2])):
+		return unit[:n-1] + "ies"
+	}
+	return unit + "s"
 }

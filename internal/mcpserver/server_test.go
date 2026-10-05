@@ -198,3 +198,29 @@ func TestDraftReminderLogsNothing(t *testing.T) {
 		t.Fatal("drafting a reminder must not record it as sent")
 	}
 }
+
+func TestDeliveriesOnItemWork(t *testing.T) {
+	cs, _ := connect(t)
+	call(t, cs, "add_client", map[string]any{"slug": "sevalla", "name": "Sevalla"}, nil)
+	var e store.Engagement
+	call(t, cs, "add_engagement", map[string]any{"client": "sevalla", "name": "articles", "basis": "item", "rate": "750", "unit": "article"}, &e)
+	if e.Unit != "article" {
+		t.Fatalf("engagement: %+v", e)
+	}
+	call(t, cs, "add_engagement", map[string]any{"client": "sevalla", "name": "consulting", "basis": "day", "rate": "600"}, nil)
+
+	var logged timeLogged
+	call(t, cs, "log_delivery", map[string]any{"engagement": "sevalla-articles", "items": "2", "what": "Two tips", "date": "2026-09-10"}, &logged)
+	if logged.Entry.Items != "2" || logged.Entry.Sheet != "sevalla-articles-2026-09" {
+		t.Fatalf("logged: %+v", logged)
+	}
+	if msg := callErr(t, cs, "log_delivery", map[string]any{"engagement": "sevalla-consulting"}); !strings.Contains(msg, "not item work") {
+		t.Fatalf("day work took a delivery: %s", msg)
+	}
+
+	var stats store.Stats
+	call(t, cs, "get_stats", map[string]any{"month": "2026-09"}, &stats)
+	if len(stats.Engagements) != 1 || stats.Engagements[0].Value == nil || *stats.Engagements[0].Value != 150000 {
+		t.Fatalf("stats: %+v", stats.Engagements)
+	}
+}

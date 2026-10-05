@@ -312,6 +312,30 @@ func TestLogTimeFromAForm(t *testing.T) {
 	}
 }
 
+func TestRecordADeliveryFromAForm(t *testing.T) {
+	s, m := withEngagement(t)
+	if m = press(t, m, "d"); m.mode != modeNormal || !strings.Contains(m.status, "no item work") {
+		t.Fatalf("day work alone should not open the form: %v %q", m.mode, m.status)
+	}
+	s.AddEngagement(store.NewEngagement{Client: "acme", Name: "articles", Title: "Articles", Basis: "item", Rate: "750", Unit: "article"})
+	m.reload()
+	m = press(t, m, "d")
+	if m.mode != modeForm || m.formTitle != "Record a delivery for acme" {
+		t.Fatalf("form should open: %v %q", m.mode, m.formTitle)
+	}
+	m = press(t, m, "enter") // the only item engagement
+	m = typeText(t, m, "Queues deep dive")
+	m = press(t, m, "enter", "backspace")
+	m = typeText(t, m, "2")
+	m = press(t, m, "enter", "enter") // items, date
+	if m.mode != modeNormal || !strings.HasPrefix(m.status, "Recorded 2 articles to acme-articles") {
+		t.Fatalf("mode %v, status %q\n%s", m.mode, m.status, m.View())
+	}
+	if entries, _, _ := s.TimeEntries(); len(entries) != 1 || entries[0].Items != "2" || entries[0].What != "Queues deep dive" {
+		t.Fatalf("entries %+v", entries)
+	}
+}
+
 func TestLogTimeNeedsAnEngagement(t *testing.T) {
 	_, m := seeded(t)
 	if m = press(t, m, "t"); m.mode != modeNormal || !strings.Contains(m.status, "no engagement") {

@@ -91,11 +91,15 @@ sandbox: build ## Seed a throwaway records folder to try mavis in (SANDBOX=path)
 	@$(SANDBOX_ENV) $(BIN) engagement add acme reporting --title "Reporting module" --basis day --rate 650 --start 2026-01-05 >/dev/null
 	@$(SANDBOX_ENV) $(BIN) engagement add acme fixes --title "Bug fixes" --basis hourly --rate 90 --start 2026-01-05 >/dev/null
 	@$(SANDBOX_ENV) $(BIN) engagement add globex care --title "Care plan" --basis retainer --rate 800 --start 2026-08-01 >/dev/null
+	@$(SANDBOX_ENV) $(BIN) engagement add globex blog --title "Blog articles" --basis item --rate 400 --unit article --start 2026-08-01 >/dev/null
 	@$(SANDBOX_ENV) $(BIN) log call acme "Scoped the reporting module; exports by month end." --with "Jo Bloggs" -e acme-reporting -f "Send estimate" --due +3d -f "Share staging access" --due +7d >/dev/null
 	@$(SANDBOX_ENV) $(BIN) note globex "Happy with the care plan; may want a redesign next year." >/dev/null
 	@$(SANDBOX_ENV) $(BIN) time acme-reporting 1d "Report filters" --date 2026-01-06 >/dev/null
 	@$(SANDBOX_ENV) $(BIN) time acme-reporting 1d "Export endpoint" --date 2026-01-07 >/dev/null
 	@$(SANDBOX_ENV) $(BIN) time acme-fixes 2h45m "Login bug" --date 2026-01-08 >/dev/null
+	@$(SANDBOX_ENV) $(BIN) delivered globex-blog "Caching in practice" --date 2026-09-04 >/dev/null
+	@$(SANDBOX_ENV) $(BIN) time globex-blog 0.5d "Caching in practice" --date 2026-09-03 >/dev/null
+	@$(SANDBOX_ENV) $(BIN) delivered globex-blog "Two short tips" --items 2 --date 2026-09-18 >/dev/null
 	@$(SANDBOX_ENV) $(BIN) invoice new acme --month 2026-01 >/dev/null
 	@$(SANDBOX_ENV) $(BIN) invoice issue acme-2026-01 --date 2026-02-01 >/dev/null
 	@$(SANDBOX_ENV) $(BIN) quote new initech --title "Reporting rebuild" --scope "A rebuilt reporting module." --line "Build=10 x 650 day" >/dev/null

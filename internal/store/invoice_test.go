@@ -157,7 +157,7 @@ func TestNothingToBill(t *testing.T) {
 }
 
 func TestQuantityReadsAsEnglish(t *testing.T) {
-	for _, c := range [][3]string{{"1", "day", "1 day"}, {"10", "day", "10 days"}, {"2.75", "hour", "2.75 hours"}, {"3", "seats", "3 seats"}, {"2", "licence", "2 licence"}, {"4", "", "4"}} {
+	for _, c := range [][3]string{{"1", "day", "1 day"}, {"10", "day", "10 days"}, {"2.75", "hour", "2.75 hours"}, {"3", "seats", "3 seats"}, {"2", "licence", "2 licences"}, {"4", "article", "4 articles"}, {"2", "copy", "2 copies"}, {"3", "day", "3 days"}, {"2", "batch", "2 batches"}, {"1", "article", "1 article"}, {"4", "", "4"}} {
 		if got := (Line{Qty: c[0], Unit: c[1]}).Quantity(); got != c[2] {
 			t.Errorf("Quantity(%q, %q) = %q, want %q", c[0], c[1], got, c[2])
 		}

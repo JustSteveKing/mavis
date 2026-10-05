@@ -30,9 +30,11 @@ func newEngagementAddCommand(a *app) *cobra.Command {
 		Long: `Adds engagements/<client>-<name>.md.
 
 Basis and rate are optional: they only matter once you track time or
-invoice.`,
-		Example: `  mavis engagement add acme reporting --title "Reporting module" --basis day --rate 650`,
-		Args:    cobra.ExactArgs(2),
+invoice. Item work is paid per thing delivered: give it a rate per item and
+a --unit, and record deliveries with mavis delivered.`,
+		Example: `  mavis engagement add acme reporting --title "Reporting module" --basis day --rate 650
+  mavis engagement add sevalla articles --basis item --rate 750 --unit article`,
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			s, err := a.openStore()
 			if err != nil {
@@ -54,7 +56,8 @@ invoice.`,
 	f.StringVar(&in.Title, "title", "", "what the work is (default: the name)")
 	f.StringVar(&in.Status, "status", "active", "one of "+strings.Join(store.EngagementStatuses, ", "))
 	f.StringVar(&in.Basis, "basis", "", "one of "+strings.Join(store.Bases, ", "))
-	f.StringVar(&in.Rate, "rate", "", "per day or hour; for a retainer, per month")
+	f.StringVar(&in.Rate, "rate", "", "per day or hour; per item for item work; per month for a retainer")
+	f.StringVar(&in.Unit, "unit", "", "for item work, what one item is, singular: article (default: item)")
 	f.StringVar(&in.Budget, "budget", "", "the agreed price of fixed-price work, or a cap on the rest")
 	f.StringVar(&in.Start, "start", "", "start date, YYYY-MM-DD (default: today, if active)")
 	f.StringVar(&in.Project, "project", "", "the project note this work belongs to")
@@ -115,11 +118,7 @@ func (a *app) engagementTable(es []store.Engagement) {
 	w := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "SLUG\tSTATUS\tCLIENT\tTITLE\tBASIS\tSTART")
 	for _, e := range es {
-		basis := e.Basis
-		if e.Rate != "" {
-			basis += " @ " + e.Rate
-		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", e.Slug, e.Status, e.Client, e.Title, basis, e.Start)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", e.Slug, e.Status, e.Client, e.Title, basisLabel(e), e.Start)
 	}
 	w.Flush()
 }
@@ -142,10 +141,7 @@ func newEngagementShowCommand(a *app) *cobra.Command {
 				return a.emitJSON(e)
 			}
 			a.printf("%s (%s)\n", e.Title, e.Slug)
-			basis := e.Basis
-			if e.Rate != "" {
-				basis += " @ " + e.Rate
-			}
+			basis := basisLabel(e)
 			w := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
 			for _, row := range [][2]string{
 				{"Client", e.Client},
@@ -191,4 +187,17 @@ func newEngagementMoveCommand(a *app, status string) *cobra.Command {
 			return nil
 		},
 	}
+}
+
+// basisLabel is how an engagement is paid: day @ 650.00, or for item work
+// item @ 750.00 per article.
+func basisLabel(e store.Engagement) string {
+	basis := e.Basis
+	if e.Rate != "" {
+		basis += " @ " + e.Rate
+		if e.Basis == "item" {
+			basis += " per " + e.UnitName()
+		}
+	}
+	return basis
 }

@@ -60,6 +60,8 @@ func (srv *server) funcs() template.FuncMap {
 		},
 		"navItems": func() []navItem { return nav },
 		"initials": initials,
+		"qty":      qty,
+		"plural":   store.Plural,
 	}
 }
 
@@ -180,6 +182,16 @@ func (r *records) EngagementTitle(slug string) string {
 		}
 	}
 	return slug
+}
+
+// Unit is what an engagement delivers, for item work.
+func (r *records) Unit(slug string) string {
+	for _, e := range r.engagements {
+		if e.Slug == slug {
+			return e.UnitName()
+		}
+	}
+	return store.DefaultUnit
 }
 
 // newestFirst returns the log reversed: Logs is oldest first.
@@ -317,6 +329,12 @@ func plural(n int, one, many string) string {
 		return "1 " + one
 	}
 	return fmt.Sprintf("%d %s", n, many)
+}
+
+// qty writes a count of items the way a sheet does: 4, 2.5.
+func qty(n money.Pence) string {
+	v := strconv.FormatFloat(float64(n)/100, 'f', 2, 64)
+	return strings.TrimRight(strings.TrimRight(v, "0"), ".")
 }
 
 // initials are the letters on a client's avatar.
@@ -487,6 +505,7 @@ type monthOfTime struct {
 	Month   string
 	Entries []store.TimeEntry
 	Minutes int
+	Items   money.Pence
 }
 
 // byMonth groups time entries by month, newest month first.
@@ -500,6 +519,7 @@ func byMonth(entries []store.TimeEntry) []monthOfTime {
 		last := &out[len(out)-1]
 		last.Entries = append(last.Entries, e)
 		last.Minutes += e.Minutes
+		last.Items += e.Count
 	}
 	slices.Reverse(out)
 	return out
@@ -524,10 +544,12 @@ func (srv *server) engagement(w http.ResponseWriter, r *http.Request) {
 	}
 	var entries []store.TimeEntry
 	total := 0
+	var items money.Pence
 	for _, t := range rec.time {
 		if t.Engagement == slug {
 			entries = append(entries, t)
 			total += t.Minutes
+			items += t.Count
 		}
 	}
 	var logs []store.LogEntry
@@ -552,6 +574,7 @@ func (srv *server) engagement(w http.ResponseWriter, r *http.Request) {
 			"Body":     body,
 			"Months":   byMonth(entries),
 			"Total":    total,
+			"Items":    items,
 			"Logs":     logs,
 			"Invoices": invoices,
 		},
@@ -656,6 +679,8 @@ func (srv *server) followUps(w http.ResponseWriter, r *http.Request) {
 type timeSum struct {
 	Engagement, Title, Name string
 	Minutes                 int
+	Items                   money.Pence
+	Unit                    string
 }
 
 func (srv *server) timePage(w http.ResponseWriter, r *http.Request) {
@@ -671,6 +696,7 @@ func (srv *server) timePage(w http.ResponseWriter, r *http.Request) {
 	var months []string
 	var rows []named[store.TimeEntry]
 	sums := map[string]*timeSum{}
+	hasItems := false
 	total := 0
 	for _, t := range rec.time {
 		if m := t.Date[:7]; !slices.Contains(months, m) {
@@ -681,9 +707,11 @@ func (srv *server) timePage(w http.ResponseWriter, r *http.Request) {
 		}
 		rows = append(rows, named[store.TimeEntry]{Item: t, Name: rec.ClientName(t.Client), Also: rec.EngagementTitle(t.Engagement)})
 		if sums[t.Engagement] == nil {
-			sums[t.Engagement] = &timeSum{t.Engagement, rec.EngagementTitle(t.Engagement), rec.ClientName(t.Client), 0}
+			sums[t.Engagement] = &timeSum{Engagement: t.Engagement, Title: rec.EngagementTitle(t.Engagement), Name: rec.ClientName(t.Client), Unit: rec.Unit(t.Engagement)}
 		}
 		sums[t.Engagement].Minutes += t.Minutes
+		sums[t.Engagement].Items += t.Count
+		hasItems = hasItems || t.Count > 0
 		total += t.Minutes
 	}
 	slices.Sort(months)
@@ -700,13 +728,14 @@ func (srv *server) timePage(w http.ResponseWriter, r *http.Request) {
 		Section:  "time",
 		Problems: rec.problems,
 		Data: map[string]any{
-			"Month":  month,
-			"Prev":   shiftMonth(month, -1),
-			"Next":   shiftMonth(month, 1),
-			"Months": months,
-			"Rows":   rows,
-			"Sums":   bySlug,
-			"Total":  total,
+			"Month":    month,
+			"Prev":     shiftMonth(month, -1),
+			"Next":     shiftMonth(month, 1),
+			"Months":   months,
+			"Rows":     rows,
+			"Sums":     bySlug,
+			"Total":    total,
+			"HasItems": hasItems,
 		},
 	})
 }
@@ -941,6 +970,7 @@ func (srv *server) stats(w http.ResponseWriter, r *http.Request) {
 			"Next":     next,
 			"PrevName": prevName,
 			"NextName": nextName,
+			"HasItems": slices.ContainsFunc(st.Engagements, func(e store.EngagementStat) bool { return e.Basis == "item" }),
 			"Year":     p.From[:4],
 			"Month":    p.From[:7],
 		},

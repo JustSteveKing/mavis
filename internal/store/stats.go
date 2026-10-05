@@ -48,6 +48,8 @@ type EngagementStat struct {
 	Rate       string       `json:"rate,omitempty"`
 	Currency   string       `json:"currency"`
 	Minutes    int          `json:"minutes"`
+	Items      string       `json:"items,omitempty"` // for item work, delivered in the period
+	Unit       string       `json:"unit,omitempty"`
 	Value      *money.Pence `json:"value_pence,omitempty"`
 	PerDay     *money.Pence `json:"per_day_pence,omitempty"`
 }
@@ -155,10 +157,12 @@ func (s *Store) Stats(p Period) (Stats, []Problem, error) {
 	}
 	inPeriod := map[string]int{}
 	toDate := map[string]int{}
+	items := map[string]money.Pence{}
 	for _, e := range entries {
 		toDate[e.Engagement] += e.Minutes
 		if p.contains(e.Date) {
 			inPeriod[e.Engagement] += e.Minutes
+			items[e.Engagement] += e.Count
 			out.Minutes += e.Minutes
 		}
 	}
@@ -197,11 +201,17 @@ func (s *Store) Stats(p Period) (Stats, []Problem, error) {
 		if e.Basis == "retainer" {
 			months = retainerMonths(e, p)
 		}
-		if inPeriod[e.Slug] == 0 && months == 0 {
+		if inPeriod[e.Slug] == 0 && months == 0 && items[e.Slug] == 0 {
 			continue
 		}
 
 		st := EngagementStat{Engagement: e.Slug, Client: e.Client, Title: e.Title, Basis: e.Basis, Rate: e.Rate, Currency: cur, Minutes: inPeriod[e.Slug]}
+		if e.Basis == "item" {
+			st.Unit = e.UnitName()
+			if n := items[e.Slug]; n > 0 {
+				st.Items = trimQty(n)
+			}
+		}
 		if rate, err := money.Parse(e.Rate); e.Rate != "" && err == nil {
 			var v money.Pence
 			ok := true
@@ -212,6 +222,8 @@ func (s *Store) Stats(p Period) (Stats, []Problem, error) {
 				v = rate.MulDiv(int64(st.Minutes), 60)
 			case "retainer":
 				v = rate.MulDiv(int64(months), 1)
+			case "item":
+				v = rate.MulDiv(int64(items[e.Slug]), 100)
 			default:
 				ok = false
 			}

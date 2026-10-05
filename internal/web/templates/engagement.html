@@ -4,11 +4,12 @@
 <h1>{{$e.Title}} {{template "status" $e.Status}}</h1>
 <dl class="facts">
   <dt>Client</dt><dd><a href="/clients/{{pathq $e.Client}}">{{$d.Name}}</a></dd>
-  {{- if $e.Basis}}<dt>Basis</dt><dd>{{$e.Basis}}{{if $e.Rate}} at {{$e.Rate}}{{end}}</dd>{{end}}
+  {{- if $e.Basis}}<dt>Basis</dt><dd>{{$e.Basis}}{{if $e.Rate}} at {{$e.Rate}}{{if eq $e.Basis "item"}} per {{$e.UnitName}}{{end}}{{end}}</dd>{{end}}
   {{- if $e.Budget}}<dt>Budget</dt><dd>{{$e.Budget}}</dd>{{end}}
   {{- if $e.Start}}<dt>Start</dt><dd>{{$e.Start}}</dd>{{end}}
   {{- if $e.End}}<dt>End</dt><dd>{{$e.End}}</dd>{{end}}
   {{- if $e.Project}}<dt>Project</dt><dd>{{$e.Project}}</dd>{{end}}
+  {{- if eq $e.Basis "item"}}<dt>Delivered</dt><dd>{{if $d.Items}}{{qty $d.Items}} {{plural $e.UnitName (qty $d.Items)}}{{else}}nothing yet{{end}}</dd>{{end}}
   <dt>Time logged</dt><dd>{{spent $d.Total}}</dd>
   <dt>File</dt><dd><code>{{$e.Path}}</code></dd>
 </dl>
@@ -16,16 +17,17 @@
 {{- with $d.Body}}<section class="body">{{md .}}</section>{{end}}
 
 <section>
-<h2>Time</h2>
+<h2>{{if eq $e.Basis "item"}}Delivered and time{{else}}Time{{end}}</h2>
 {{- range $d.Months}}
-<h3><a href="/time/?month={{.Month}}">{{month .Month}}</a> <span class="muted">{{spent .Minutes}}</span></h3>
+{{- $item := eq $e.Basis "item"}}
+<h3><a href="/time/?month={{.Month}}">{{month .Month}}</a> <span class="muted">{{if .Items}}{{qty .Items}} {{plural $e.UnitName (qty .Items)}}{{if .Minutes}}, {{end}}{{end}}{{if .Minutes}}{{spent .Minutes}}{{end}}</span></h3>
 <div class="scroll">
 <table>
-  <thead><tr><th scope="col">Date</th><th scope="col" class="num">Time</th><th scope="col">What</th></tr></thead>
-  <tbody>{{range .Entries}}<tr><td>{{.Date}}</td><td class="num">{{.Time}}</td><td>{{.What}}</td></tr>{{end}}</tbody>
+  <thead><tr><th scope="col">Date</th>{{if $item}}<th scope="col" class="num">Items</th>{{end}}<th scope="col" class="num">Time</th><th scope="col">What</th></tr></thead>
+  <tbody>{{range .Entries}}<tr><td>{{.Date}}</td>{{if $item}}<td class="num">{{or .Items "-"}}</td>{{end}}<td class="num">{{or .Time "-"}}</td><td>{{.What}}</td></tr>{{end}}</tbody>
 </table>
 </div>
-{{- else}}<p class="quiet">No time logged. <code>mavis time {{$e.Slug}} 1d "what"</code></p>{{end}}
+{{- else}}<p class="quiet">{{if eq $e.Basis "item"}}Nothing delivered yet. <code>mavis delivered {{$e.Slug}} "what"</code>{{else}}No time logged. <code>mavis time {{$e.Slug}} 1d "what"</code>{{end}}</p>{{end}}
 </section>
 
 {{- if $d.Invoices}}

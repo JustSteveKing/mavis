@@ -105,6 +105,8 @@ func (m model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.previewReminder()
 	case "t":
 		return m.startTime()
+	case "d":
+		return m.startDelivery()
 	case "l":
 		return m.startCall()
 	case "m":
