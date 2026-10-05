@@ -244,3 +244,14 @@ func TestItemWorkShowsWhatWasDelivered(t *testing.T) {
 		}
 	}
 }
+
+func TestClientPageSaysWhereItIsInvoiced(t *testing.T) {
+	s, h := seeded(t)
+	where := "FreeAgent"
+	if _, err := s.SetClient("acme", store.ClientUpdate{Invoicing: &where}); err != nil {
+		t.Fatal(err)
+	}
+	if got := body(t, get(t, h, "/clients/acme")); !strings.Contains(got, "FreeAgent, not mavis") {
+		t.Error("the client page does not say where it is invoiced")
+	}
+}

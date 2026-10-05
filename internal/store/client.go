@@ -43,6 +43,11 @@ type Client struct {
 	PeppolID       string `json:"peppol_id,omitempty"`
 	BuyerReference string `json:"buyer_reference,omitempty"`
 
+	// Invoicing names where this client is invoiced when it is not mavis:
+	// FreeAgent, Upwork. mavis then drafts no invoices for them, so two
+	// systems never number the same client's work. Empty means mavis.
+	Invoicing string `json:"invoicing,omitempty"`
+
 	Path string `json:"path"`
 }
 
@@ -59,6 +64,16 @@ func (c Client) Treatment() string {
 		return "standard"
 	}
 	return "reverse-charge"
+}
+
+// InvoicedElsewhere says whether another system invoices this client.
+func (c Client) InvoicedElsewhere() bool {
+	return c.Invoicing != "" && !strings.EqualFold(c.Invoicing, "mavis")
+}
+
+// ErrInvoicedElsewhere is why a draft was refused for such a client.
+func (c Client) errInvoicedElsewhere() error {
+	return fmt.Errorf("%s is invoiced in %s (invoicing: on its note), so mavis does not draft its invoices; if that changes, mavis client set %s --invoicing mavis", c.Slug, c.Invoicing, c.Slug)
 }
 
 // NewClient is what `client add` supplies.
@@ -89,6 +104,7 @@ func clientFrom(path string, d *record.Document) Client {
 
 		PeppolID:       d.Get("peppol_id"),
 		BuyerReference: d.Get("buyer_reference"),
+		Invoicing:      d.Get("invoicing"),
 
 		Path: path,
 	}
@@ -246,6 +262,7 @@ type ClientUpdate struct {
 	Name, Contact, Email, Phone, Currency *string
 	Country, VATNumber, VATTreatment      *string
 	PeppolID, BuyerReference              *string
+	Invoicing                             *string // "" or "mavis" clears it
 	TermsDays                             *int
 	Address                               []string // nil leaves it alone
 }
@@ -281,6 +298,13 @@ func (s *Store) SetClient(query string, u ClientUpdate) (Client, error) {
 	if u.PeppolID != nil && *u.PeppolID != "" && !PeppolIDPattern.MatchString(*u.PeppolID) {
 		return Client{}, fmt.Errorf("peppol id %q: use scheme:value, like 9932:GB123456789", *u.PeppolID)
 	}
+	if u.Invoicing != nil {
+		v := strings.Join(strings.Fields(*u.Invoicing), " ")
+		if strings.EqualFold(v, "mavis") {
+			v = ""
+		}
+		u.Invoicing = &v
+	}
 	if u.TermsDays != nil && *u.TermsDays <= 0 {
 		return Client{}, fmt.Errorf("terms must be at least one day")
 	}
@@ -304,6 +328,7 @@ func (s *Store) SetClient(query string, u ClientUpdate) (Client, error) {
 			{"name", u.Name}, {"contact", u.Contact}, {"email", u.Email}, {"phone", u.Phone},
 			{"currency", u.Currency}, {"country", u.Country}, {"vat_number", u.VATNumber},
 			{"vat_treatment", u.VATTreatment}, {"peppol_id", u.PeppolID}, {"buyer_reference", u.BuyerReference},
+			{"invoicing", u.Invoicing},
 		} {
 			key, v := f.key, f.v
 			switch {

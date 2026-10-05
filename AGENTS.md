@@ -221,6 +221,13 @@ terminal. `TestFrameFitsTheTerminal` renders at three sizes and fails on any
 line wider than the terminal or a frame of the wrong height; the footer is
 truncated rather than wrapped for that reason.
 
+**`invoicing:` on a client means another system invoices them** (FreeAgent,
+Upwork). `AddInvoice` refuses for such a client before building anything,
+so the CLI, MCP and TUI all get the same refusal and message, and
+`RetainersDue` leaves their retainers out. Quotes are unaffected. Empty, or
+`mavis` in any case, means mavis invoices them; `SetClient` stores `mavis`
+as no field at all.
+
 **Item work shares the timesheet.** `basis: item` engagements carry a rate
 per item and a `unit`; deliveries are rows in the same monthly sheet, with
 an `Items` column. Sheets are read by their header row (`columns`), so

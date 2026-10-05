@@ -40,3 +40,18 @@ func TestDeliveredOnItemWork(t *testing.T) {
 		t.Errorf("stats: %s", out)
 	}
 }
+
+func TestClientSetInvoicing(t *testing.T) {
+	setup(t)
+	run(t, "client", "add", "mozilla", "--name", "Mozilla")
+	if _, err := run(t, "client", "set", "mozilla", "--invoicing", "Upwork"); err != nil {
+		t.Fatal(err)
+	}
+	out, _ := run(t, "client", "show", "mozilla")
+	if !strings.Contains(out, "Upwork, not mavis") {
+		t.Errorf("show: %s", out)
+	}
+	if _, err := run(t, "invoice", "new", "mozilla", "--line", "Work=100"); err == nil || !strings.Contains(err.Error(), "invoiced in Upwork") {
+		t.Errorf("invoice new: %v", err)
+	}
+}

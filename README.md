@@ -167,6 +167,18 @@ mavis will suggest a move in `today`, and it will never make one. Whether a
 client is warm is your judgement, and a tool that quietly reclassified people
 would be wrong in exactly the cases you care about.
 
+Some clients are invoiced somewhere else: an accountant's system, or a
+platform like Upwork. Say so, and mavis will not draft invoices for them:
+
+```bash
+mavis client set mozilla --invoicing Upwork
+```
+
+Their time, deliveries and stats work as before. What changes is that
+`invoice new` refuses with the reason, their retainers drop out of `today`,
+and the TUI stops offering `i`. Two systems numbering the same client's
+invoices is how you get gaps and duplicates. `--invoicing mavis` clears it.
+
 ## Engagements
 
 An engagement is one piece of work for one client. A client can have several

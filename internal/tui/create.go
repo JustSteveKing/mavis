@@ -146,6 +146,9 @@ func (m model) startDraftInvoice() (tea.Model, tea.Cmd) {
 	if r == nil || r.client == "" {
 		return m.say("i drafts an invoice for a client; select one first")
 	}
+	if c, ok := m.clientBySlug(r.client); ok && c.InvoicedElsewhere() {
+		return m.say(r.client + " is invoiced in " + c.Invoicing + ", so mavis drafts no invoices for them")
+	}
 	client := r.client
 	today, _ := time.Parse("2006-01-02", m.today.Date)
 	// Last month by default: billing usually follows the month.

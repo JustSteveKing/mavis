@@ -224,3 +224,18 @@ func TestDeliveriesOnItemWork(t *testing.T) {
 		t.Fatalf("stats: %+v", stats.Engagements)
 	}
 }
+
+func TestNoDraftsForClientsInvoicedElsewhere(t *testing.T) {
+	cs, _ := connect(t)
+	call(t, cs, "add_client", map[string]any{"slug": "mozilla", "name": "Mozilla"}, nil)
+	call(t, cs, "add_engagement", map[string]any{"client": "mozilla", "name": "ichabod", "basis": "hourly", "rate": "130"}, nil)
+	call(t, cs, "log_time", map[string]any{"engagement": "mozilla-ichabod", "duration": "3h", "date": "2026-09-10"}, nil)
+	var c store.Client
+	call(t, cs, "update_client", map[string]any{"slug": "mozilla", "invoicing": "Upwork"}, &c)
+	if c.Invoicing != "Upwork" {
+		t.Fatalf("client: %+v", c)
+	}
+	if msg := callErr(t, cs, "draft_invoice", map[string]any{"client": "mozilla", "month": "2026-09"}); !strings.Contains(msg, "invoiced in Upwork") {
+		t.Fatalf("got %s", msg)
+	}
+}

@@ -275,6 +275,9 @@ func (m model) clientDetail(c store.Client) string {
 	if who := strings.TrimSpace(strings.Join([]string{c.Contact, c.Email, c.Phone}, "  ")); who != "" {
 		b.WriteString(who + "\n")
 	}
+	if c.InvoicedElsewhere() {
+		b.WriteString(styleDim.Render("Invoiced in "+c.Invoicing+", not mavis") + "\n")
+	}
 
 	var active []string
 	for _, e := range m.engagements {
@@ -431,7 +434,10 @@ func (m model) footer() string {
 				if len(m.itemEngagements(r.client)) > 0 {
 					keys = append(keys, [2]string{"d", "delivered"})
 				}
-				keys = append(keys, [2]string{"n", "note"}, [2]string{"m", "move"}, [2]string{"e", "engagement"}, [2]string{"i", "invoice"})
+				keys = append(keys, [2]string{"n", "note"}, [2]string{"m", "move"}, [2]string{"e", "engagement"})
+				if c, ok := m.clientBySlug(r.client); !ok || !c.InvoicedElsewhere() {
+					keys = append(keys, [2]string{"i", "invoice"})
+				}
 			}
 			if inv, ok := m.invoiceFor(r); ok && inv.Kind == "invoice" && inv.Status == "issued" {
 				keys = append(keys, [2]string{"p", "paid"})

@@ -30,7 +30,7 @@ them unless the user tells you to.
 |---|---|
 | `mavis client add <slug> --name "..." [--contact --email --phone --status]` | Add a client |
 | `mavis client list [--status s]` / `client show <client>` | Read |
-| `mavis client set <client> [--address line --country GB --vat-number ... --peppol-id ... --buyer-reference ... --terms 30]` | Change details |
+| `mavis client set <client> [--address line --country GB --vat-number ... --peppol-id ... --buyer-reference ... --terms 30 --invoicing FreeAgent]` | Change details; `--invoicing` names where a client is invoiced when not by mavis |
 | `mavis client <prospect\|active\|warm\|cold> <client>` | Move a client, only when asked |
 | `mavis engagement add <client> <name> --title "..." [--basis day --rate 650 --budget ... --start ...]` | Add an engagement; item work takes `--basis item --rate 750 --unit article` |
 | `mavis engagement list [--client c]` / `engagement show <e>` | Read |

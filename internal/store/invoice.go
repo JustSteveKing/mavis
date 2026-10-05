@@ -380,6 +380,9 @@ func (s *Store) AddInvoice(in NewInvoice) (Invoice, []Skipped, error) {
 		if err != nil {
 			return err
 		}
+		if client.InvoicedElsewhere() {
+			return client.errInvoicedElsewhere()
+		}
 		vat := defaultVATFor(client.Treatment())
 
 		var lines []Line

@@ -121,6 +121,11 @@ them. Never derive a Peppol ID from a VAT number: `9932:GB123456789` and
 
 ## Things that look wrong and are not
 
+- `draft_invoice` refuses a client whose note says `invoicing:` (FreeAgent,
+  Upwork): they are invoiced elsewhere. Tell the user so; do not clear the
+  field to get a draft through. Change it only when the user says their
+  invoicing has moved.
+
 - Money in tool output is integer pence in every field ending `_pence`:
   `428150` is 4,281.50. Amounts you send are decimal strings, `"650"`.
 - Stats report value (time at rates), not revenue. Revenue comes from

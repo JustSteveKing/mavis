@@ -11,6 +11,7 @@
 <dl class="facts">
   {{- if $c.Phone}}<dt>Phone</dt><dd>{{$c.Phone}}</dd>{{end}}
   {{- if $c.StatusSince}}<dt>Status since</dt><dd>{{$c.StatusSince}} <span class="muted">{{rel $c.StatusSince}}</span></dd>{{end}}
+  {{- if $c.InvoicedElsewhere}}<dt>Invoicing</dt><dd>{{$c.Invoicing}}, not mavis</dd>{{end}}
   <dt>Terms</dt><dd>{{$c.TermsDays}} days, {{$c.Currency}}</dd>
   {{- if $c.Address}}<dt>Address</dt><dd>{{join $c.Address ", "}}{{if $c.Country}}, {{$c.Country}}{{end}}</dd>{{end}}
   {{- if $c.VATNumber}}<dt>VAT number</dt><dd>{{$c.VATNumber}}</dd>{{end}}

@@ -30,6 +30,15 @@ func (s *Store) RetainersDue() ([]RetainerDue, error) {
 	if err != nil {
 		return nil, err
 	}
+	clients, _, err := s.Clients()
+	if err != nil {
+		return nil, err
+	}
+	// A client invoiced in another system bills its retainer there too.
+	elsewhere := map[string]bool{}
+	for _, c := range clients {
+		elsewhere[c.Slug] = c.InvoicedElsewhere()
+	}
 	invoices, _, err := s.Invoices()
 	if err != nil {
 		return nil, err
@@ -49,7 +58,7 @@ func (s *Store) RetainersDue() ([]RetainerDue, error) {
 
 	var out []RetainerDue
 	for _, e := range engagements {
-		if e.Basis != "retainer" || e.Rate == "" || e.Status == "proposed" || e.Status == "paused" {
+		if e.Basis != "retainer" || e.Rate == "" || e.Status == "proposed" || e.Status == "paused" || elsewhere[e.Client] {
 			continue
 		}
 		from := lastDone

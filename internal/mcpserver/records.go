@@ -30,6 +30,7 @@ type updateClientIn struct {
 	VATNumber      *string   `json:"vat_number,omitempty"`
 	PeppolID       *string   `json:"peppol_id,omitempty" jsonschema:"scheme:value, e.g. 9932:GB123456789; never guess it from a VAT number"`
 	BuyerReference *string   `json:"buyer_reference,omitempty" jsonschema:"the reference they want on invoices, e.g. a PO number"`
+	Invoicing      *string   `json:"invoicing,omitempty" jsonschema:"where the client is invoiced when not by mavis, e.g. FreeAgent or Upwork; mavis then drafts no invoices for them. Set only when the human says so; mavis clears it"`
 }
 
 type moveIn struct {
@@ -97,7 +98,7 @@ func (t *tools) registerRecords(srv *mcp.Server) {
 			u := store.ClientUpdate{
 				Name: in.Name, Contact: in.Contact, Email: in.Email, Phone: in.Phone, Currency: in.Currency,
 				Country: in.Country, VATNumber: in.VATNumber, PeppolID: in.PeppolID, BuyerReference: in.BuyerReference,
-				TermsDays: in.TermsDays,
+				Invoicing: in.Invoicing, TermsDays: in.TermsDays,
 			}
 			if in.Address != nil {
 				u.Address = *in.Address

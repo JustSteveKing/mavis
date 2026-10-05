@@ -181,6 +181,7 @@ func newClientShowCommand(a *app) *cobra.Command {
 				{"VAT", c.Treatment()},
 				{"Peppol ID", c.PeppolID},
 				{"Buyer ref", c.BuyerReference},
+				{"Invoicing", invoicingLabel(c)},
 				{"File", c.Path},
 			} {
 				if row[1] != "" {
@@ -248,7 +249,7 @@ func firstLine(s string) string {
 
 func newClientSetCommand(a *app) *cobra.Command {
 	var u store.ClientUpdate
-	var name, contact, email, phone, currency, country, vatNumber, vatTreatment, peppolID, buyerRef string
+	var name, contact, email, phone, currency, country, vatNumber, vatTreatment, peppolID, buyerRef, invoicing string
 	var terms int
 	var address []string
 	cmd := &cobra.Command{
@@ -259,10 +260,15 @@ anything added by hand, is kept. An empty value removes a field.
 
 Billing details (address, country, VAT number) are only needed once you
 invoice the client. VAT treatment follows the country unless set: standard
-for GB, reverse charge for anywhere else.`,
+for GB, reverse charge for anywhere else.
+
+--invoicing names where a client is invoiced when it is not mavis, such as
+FreeAgent or Upwork. mavis then refuses to draft invoices for them and
+leaves their retainers out of today; --invoicing mavis clears it.`,
 		Example: `  mavis client set acme --address "1 High Street" --address "Manchester M1 1AA" --country GB
   mavis client set globex --country DE --vat-number DE123456789
-  mavis client set acme --phone ""`,
+  mavis client set acme --phone ""
+  mavis client set mozilla --invoicing Upwork`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			f := cmd.Flags()
@@ -274,6 +280,7 @@ for GB, reverse charge for anywhere else.`,
 				"phone": {&u.Phone, &phone}, "currency": {&u.Currency, &currency}, "country": {&u.Country, &country},
 				"vat-number": {&u.VATNumber, &vatNumber}, "vat-treatment": {&u.VATTreatment, &vatTreatment},
 				"peppol-id": {&u.PeppolID, &peppolID}, "buyer-reference": {&u.BuyerReference, &buyerRef},
+				"invoicing": {&u.Invoicing, &invoicing},
 			} {
 				if f.Changed(flag) {
 					*target.dst = target.val
@@ -316,5 +323,14 @@ for GB, reverse charge for anywhere else.`,
 	f.StringVar(&vatTreatment, "vat-treatment", "", "override: "+strings.Join(store.VATTreatments, ", "))
 	f.StringVar(&peppolID, "peppol-id", "", "for e-invoices: their Peppol participant, scheme:value, e.g. 9932:GB123456789")
 	f.StringVar(&buyerRef, "buyer-reference", "", "for e-invoices: the reference they want on invoices, e.g. a PO number")
+	f.StringVar(&invoicing, "invoicing", "", "where they are invoiced when not by mavis, e.g. FreeAgent; mavis clears it")
 	return cmd
+}
+
+// invoicingLabel says where a client is invoiced, when it is not mavis.
+func invoicingLabel(c store.Client) string {
+	if !c.InvoicedElsewhere() {
+		return ""
+	}
+	return c.Invoicing + ", not mavis"
 }

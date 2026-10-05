@@ -336,6 +336,19 @@ func TestRecordADeliveryFromAForm(t *testing.T) {
 	}
 }
 
+func TestNoInvoiceFormForAClientInvoicedElsewhere(t *testing.T) {
+	s, m := seeded(t)
+	where := "FreeAgent"
+	s.SetClient("acme", store.ClientUpdate{Invoicing: &where})
+	m.reload()
+	if m = press(t, m, "i"); m.mode != modeNormal || !strings.Contains(m.status, "invoiced in FreeAgent") {
+		t.Fatalf("mode %v, status %q", m.mode, m.status)
+	}
+	if strings.Contains(m.View(), "i invoice") {
+		t.Error("the footer still offers i")
+	}
+}
+
 func TestLogTimeNeedsAnEngagement(t *testing.T) {
 	_, m := seeded(t)
 	if m = press(t, m, "t"); m.mode != modeNormal || !strings.Contains(m.status, "no engagement") {

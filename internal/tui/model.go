@@ -511,3 +511,13 @@ func (m *model) selectWhere(match func(row) bool) {
 		}
 	}
 }
+
+// clientBySlug finds a client among those loaded.
+func (m model) clientBySlug(slug string) (store.Client, bool) {
+	for _, c := range m.clients {
+		if c.Slug == slug {
+			return c, true
+		}
+	}
+	return store.Client{}, false
+}
